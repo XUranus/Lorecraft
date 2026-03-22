@@ -24,8 +24,8 @@ function connect() {
 
   ws.onopen = () => {
     setConnectionStatus('connected')
-    appendNarrative('已连接到服务器，正在初始化…', 'system')
-    ws.send(JSON.stringify({ type: 'initialize' }))
+    appendNarrative('已连接到服务器…', 'system')
+    ws.send(JSON.stringify({ type: 'initialize' }))  // Server will replay state if already initialized
   }
 
   ws.onmessage = (e) => {

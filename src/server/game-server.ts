@@ -8,73 +8,29 @@ import { ClientMessageSchema } from './protocol.js'
 import type { ServerMessage } from './protocol.js'
 
 // ============================================================
-// GameSession — one per WebSocket connection
+// WsBridge — forwards GameEventListener calls to a WebSocket
 // ============================================================
 
-class GameSession implements GameEventListener {
-  private readonly ws: WebSocket
-  private readonly gameLoop: GameLoop
-  private initialized = false
+class WsBridge implements GameEventListener {
+  private ws: WebSocket | null = null
 
-  constructor(ws: WebSocket, provider: ILLMProvider, debug?: boolean | string) {
+  attach(ws: WebSocket): void {
     this.ws = ws
-    this.gameLoop = new GameLoop(provider, debug ? { debug } : undefined)
-    this.gameLoop.setListener(this)
   }
 
-  async handleMessage(raw: string): Promise<void> {
-    let msg
-    try {
-      msg = ClientMessageSchema.parse(JSON.parse(raw))
-    } catch {
-      this.send({ type: 'error', message: '无效的消息格式' })
-      return
-    }
-
-    switch (msg.type) {
-      case 'ping':
-        this.send({ type: 'pong' })
-        break
-
-      case 'initialize':
-        if (this.initialized) {
-          this.send({ type: 'error', message: '游戏已初始化' })
-          return
-        }
-        try {
-          await this.gameLoop.initialize()
-          this.initialized = true
-        } catch (err) {
-          this.send({
-            type: 'error',
-            message: `初始化失败: ${err instanceof Error ? err.message : String(err)}`,
-          })
-        }
-        break
-
-      case 'input':
-        if (!this.initialized) {
-          this.send({ type: 'error', message: '游戏尚未初始化' })
-          return
-        }
-        await this.gameLoop.processInput(msg.text)
-        break
-
-      case 'save':
-        try {
-          const saveId = await this.gameLoop.save()
-          this.send({ type: 'save_result', saveId })
-        } catch (err) {
-          this.send({
-            type: 'save_error',
-            message: err instanceof Error ? err.message : String(err),
-          })
-        }
-        break
-    }
+  detach(): void {
+    this.ws = null
   }
 
-  // ---- GameEventListener implementation ----
+  get connected(): boolean {
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN
+  }
+
+  send(msg: ServerMessage): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg))
+    }
+  }
 
   onNarrative(text: string, source: string): void {
     this.send({ type: 'narrative', text, source })
@@ -99,18 +55,10 @@ class GameSession implements GameEventListener {
   onInitComplete(doc: GenesisDocument): void {
     this.send({ type: 'init_complete', doc })
   }
-
-  // ---- Internal ----
-
-  private send(msg: ServerMessage): void {
-    if (this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg))
-    }
-  }
 }
 
 // ============================================================
-// GameServer — WebSocket server managing sessions
+// GameServer — persistent game session, clients come and go
 // ============================================================
 
 export const DEFAULT_PORT = 3015
@@ -123,38 +71,62 @@ export interface GameServerOptions {
 
 export class GameServer {
   private wss: WebSocketServer | null = null
-  private sessions = new Map<WebSocket, GameSession>()
   private readonly options: GameServerOptions
+
+  // Single persistent game session
+  private gameLoop: GameLoop
+  private bridge: WsBridge
+  private initialized = false
+  private genesisDoc: GenesisDocument | null = null
 
   constructor(options: GameServerOptions) {
     this.options = options
+    this.bridge = new WsBridge()
+    this.gameLoop = new GameLoop(options.provider, options.debug ? { debug: options.debug } : undefined)
+    this.gameLoop.setListener(this.bridge)
   }
 
   start(): Promise<void> {
     return new Promise((resolve) => {
       this.wss = new WebSocketServer({ port: this.options.port })
 
+      // Intercept onInitComplete to cache the genesis doc
+      const originalOnInitComplete = this.bridge.onInitComplete.bind(this.bridge)
+      this.bridge.onInitComplete = (doc: GenesisDocument) => {
+        this.genesisDoc = doc
+        originalOnInitComplete(doc)
+      }
+
       this.wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
-        const session = new GameSession(ws, this.options.provider, this.options.debug)
-        this.sessions.set(ws, session)
+        // Detach previous client if any
+        this.bridge.detach()
+        this.bridge.attach(ws)
+
+        // If game is already initialized, replay state to the new client
+        if (this.initialized && this.genesisDoc) {
+          this.bridge.send({ type: 'init_complete', doc: this.genesisDoc })
+          // Replay current status
+          const state = this.gameLoop.getGameState()
+          if (state) {
+            this.bridge.send({ type: 'status', location: state.currentLocation, turn: state.currentTurn })
+          }
+        }
 
         ws.on('message', async (data) => {
           try {
-            await session.handleMessage(data.toString())
+            await this.handleMessage(data.toString())
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'error', message: msg }))
-            }
+            this.bridge.send({ type: 'error', message: msg })
           }
         })
 
         ws.on('close', () => {
-          this.sessions.delete(ws)
+          this.bridge.detach()
         })
 
         ws.on('error', () => {
-          this.sessions.delete(ws)
+          this.bridge.detach()
         })
       })
 
@@ -164,26 +136,77 @@ export class GameServer {
     })
   }
 
+  private async handleMessage(raw: string): Promise<void> {
+    let msg
+    try {
+      msg = ClientMessageSchema.parse(JSON.parse(raw))
+    } catch {
+      this.bridge.send({ type: 'error', message: '无效的消息格式' })
+      return
+    }
+
+    switch (msg.type) {
+      case 'ping':
+        this.bridge.send({ type: 'pong' })
+        break
+
+      case 'initialize':
+        if (this.initialized) {
+          // Already initialized — just replay state
+          if (this.genesisDoc) {
+            this.bridge.send({ type: 'init_complete', doc: this.genesisDoc })
+            const state = this.gameLoop.getGameState()
+            if (state) {
+              this.bridge.send({ type: 'status', location: state.currentLocation, turn: state.currentTurn })
+            }
+          }
+          return
+        }
+        try {
+          await this.gameLoop.initialize()
+          this.initialized = true
+        } catch (err) {
+          this.bridge.send({
+            type: 'error',
+            message: `初始化失败: ${err instanceof Error ? err.message : String(err)}`,
+          })
+        }
+        break
+
+      case 'input':
+        if (!this.initialized) {
+          this.bridge.send({ type: 'error', message: '游戏尚未初始化' })
+          return
+        }
+        await this.gameLoop.processInput(msg.text)
+        break
+
+      case 'save':
+        try {
+          const saveId = await this.gameLoop.save()
+          this.bridge.send({ type: 'save_result', saveId })
+        } catch (err) {
+          this.bridge.send({
+            type: 'save_error',
+            message: err instanceof Error ? err.message : String(err),
+          })
+        }
+        break
+    }
+  }
+
   stop(): Promise<void> {
     return new Promise((resolve) => {
       if (!this.wss) {
         resolve()
         return
       }
-      // Close all connections
-      for (const ws of this.sessions.keys()) {
-        ws.close()
-      }
-      this.sessions.clear()
+      this.bridge.detach()
       this.wss.close(() => resolve())
     })
   }
 
   get port(): number {
     return this.options.port
-  }
-
-  get connectionCount(): number {
-    return this.sessions.size
   }
 }
