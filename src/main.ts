@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import 'dotenv/config'
 import type { ILLMProvider } from './ai/runner/llm-provider.js'
 import { AnthropicProvider } from './ai/runner/anthropic-provider.js'
 import { GeminiProvider } from './ai/runner/gemini-provider.js'
