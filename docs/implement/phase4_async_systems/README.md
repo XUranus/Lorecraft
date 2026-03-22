@@ -141,7 +141,6 @@ Phase 4 完成后，事件广播能触发所有异步消费者，叙事轨道能
 **4.3.3 Lore 写入与同步**
 - 写入 LoreStore（含 `causal_chain` 追加）
 - 同步更新相关 NPC 的 `NPCProfile` 本地缓存
-- 生成 Lore 内容的 Embedding → 写入 VectorStore（命名空间 `lore:global`）
 
 **4.3.4 content_hash 幂等写入**
 - 对 `ExtractedFact.content` 计算 hash

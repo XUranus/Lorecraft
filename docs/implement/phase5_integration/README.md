@@ -94,7 +94,7 @@ Phase 5 完成后，从零输入启动到完整游戏循环的全流程可运行
   3. 恢复 `MemoryBuffer` 和 `ConversationHistory`
   4. 恢复 `TraitWeight`
   5. 恢复注入队列
-  6. 重建 VectorStore 索引（如需，从 MemoryBuffer 和 LoreStore 重新生成 Embedding）
+  6. 重建长期记忆倒排索引（从长期记忆存储重新构建）
 - 不重放事件（状态快照已包含完整当前状态）
 
 **5.2.3 重玩同一世界**
