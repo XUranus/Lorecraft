@@ -54,3 +54,15 @@ export type {
   NarrativeOutput,
   PipelineError,
 } from './orchestration/pipeline/index.js'
+
+// Orchestration - Pipeline Steps
+export * from './orchestration/steps/index.js'
+
+// Domain Services
+export {
+  SignalProcessor,
+  LocationGraph,
+  InsistenceStateMachine,
+} from './domain/services/index.js'
+
+export type { TraversalContext } from './domain/services/index.js'
