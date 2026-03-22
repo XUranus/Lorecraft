@@ -4,6 +4,8 @@ import type { ILLMProvider } from '../ai/runner/llm-provider.js'
 import { GameLoop } from '../interface/game-loop.js'
 import type { GameEventListener } from '../interface/game-loop.js'
 import type { GenesisDocument } from '../domain/models/genesis.js'
+import type { PlayerAttributes } from '../domain/models/attributes.js'
+import type { AttributeCheckResult } from '../orchestration/steps/arbitration-steps.js'
 import { ClientMessageSchema } from './protocol.js'
 import type { ServerMessage } from './protocol.js'
 
@@ -55,6 +57,36 @@ class WsBridge implements GameEventListener {
   onInitComplete(doc: GenesisDocument): void {
     this.send({ type: 'init_complete', doc })
   }
+
+  onCheck(check: AttributeCheckResult): void {
+    if (check.needed && check.attribute_display_name != null) {
+      this.send({
+        type: 'check',
+        attribute: check.attribute_display_name,
+        target: check.target!,
+        roll: check.roll!,
+        attribute_value: check.attribute_value!,
+        total: check.total!,
+        passed: check.passed!,
+      })
+    }
+  }
+
+  onCharCreate(attributes: PlayerAttributes, meta: Array<{ id: string; display_name: string; domain: string }>): void {
+    this.send({ type: 'char_create', attributes: attributes as unknown as Record<string, number>, attribute_meta: meta })
+  }
+
+  onDebugTurnStart(turn: number, input: string): void {
+    this.send({ type: 'debug_turn_start', turn, input })
+  }
+
+  onDebugStep(step: string, phase: 'start' | 'end', status?: string, duration_ms?: number, data?: string): void {
+    this.send({ type: 'debug_step', step, phase, status, duration_ms, data })
+  }
+
+  onDebugState(states: Record<string, unknown>): void {
+    this.send({ type: 'debug_state', states })
+  }
 }
 
 // ============================================================
@@ -77,6 +109,7 @@ export class GameServer {
   private gameLoop: GameLoop
   private bridge: WsBridge
   private initialized = false
+  private initializing = false
   private genesisDoc: GenesisDocument | null = null
 
   constructor(options: GameServerOptions) {
@@ -105,11 +138,14 @@ export class GameServer {
         // If game is already initialized, replay state to the new client
         if (this.initialized && this.genesisDoc) {
           this.bridge.send({ type: 'init_complete', doc: this.genesisDoc })
-          // Replay current status
           const state = this.gameLoop.getGameState()
           if (state) {
             this.bridge.send({ type: 'status', location: state.currentLocation, turn: state.currentTurn })
           }
+        } else if (this.gameLoop.isAwaitingCharConfirm && this.genesisDoc) {
+          // World generated but char not confirmed yet — replay char_create
+          this.bridge.send({ type: 'init_complete', doc: this.genesisDoc })
+          this.gameLoop.rerollAttributes()
         }
 
         ws.on('message', async (data) => {
@@ -162,13 +198,50 @@ export class GameServer {
           }
           return
         }
+        if (this.gameLoop.isAwaitingCharConfirm) {
+          // World already generated, still waiting for char confirmation — re-send char_create
+          this.gameLoop.rerollAttributes()
+          return
+        }
+        if (this.initializing) {
+          // Initialization already in progress (e.g. client reconnected) — ignore
+          this.bridge.send({ type: 'init_progress', step: '正在初始化，请稍候…' })
+          return
+        }
+        this.initializing = true
         try {
           await this.gameLoop.initialize()
-          this.initialized = true
+          // Don't set initialized=true yet — waiting for confirm_attributes
         } catch (err) {
           this.bridge.send({
             type: 'error',
             message: `初始化失败: ${err instanceof Error ? err.message : String(err)}`,
+          })
+        } finally {
+          this.initializing = false
+        }
+        break
+
+      case 'reroll_attributes':
+        if (!this.gameLoop.isAwaitingCharConfirm) {
+          this.bridge.send({ type: 'error', message: '当前不在角色创建阶段' })
+          return
+        }
+        this.gameLoop.rerollAttributes()
+        break
+
+      case 'confirm_attributes':
+        if (!this.gameLoop.isAwaitingCharConfirm) {
+          this.bridge.send({ type: 'error', message: '当前不在角色创建阶段' })
+          return
+        }
+        try {
+          await this.gameLoop.confirmAttributes(msg.attributes as unknown as PlayerAttributes)
+          this.initialized = true
+        } catch (err) {
+          this.bridge.send({
+            type: 'error',
+            message: err instanceof Error ? err.message : String(err),
           })
         }
         break
@@ -191,6 +264,14 @@ export class GameServer {
             message: err instanceof Error ? err.message : String(err),
           })
         }
+        break
+
+      case 'reset':
+        this.gameLoop.reset()
+        this.initialized = false
+        this.initializing = false
+        this.genesisDoc = null
+        this.bridge.send({ type: 'reset_complete' })
         break
     }
   }

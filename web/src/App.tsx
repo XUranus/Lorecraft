@@ -3,11 +3,13 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { TitleBar } from './components/TitleBar'
 import { TabBar } from './components/TabBar'
 import { BottomBar } from './components/BottomBar'
+import { CharCreateOverlay } from './components/CharCreateOverlay'
 import { tabs } from './tabs/registry'
 
 // Import tabs so they self-register
 import './tabs/NarrativeTab'
 import './tabs/VoicesTab'
+import './tabs/DebugTab'
 
 export function App() {
   useWebSocket()
@@ -23,6 +25,7 @@ export function App() {
         {ActiveComponent && <ActiveComponent />}
       </main>
       <BottomBar />
+      <CharCreateOverlay />
     </div>
   )
 }

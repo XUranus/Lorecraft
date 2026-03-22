@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { PlayerAttributesSchema } from './attributes.js'
 
 // ============================================================
 // Genesis Document Sub-types
@@ -40,6 +41,7 @@ export const PlayerCharacterDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
   background: z.string(),
+  attributes: PlayerAttributesSchema.optional(),
 })
 
 export type PlayerCharacterDefinition = z.infer<typeof PlayerCharacterDefinitionSchema>

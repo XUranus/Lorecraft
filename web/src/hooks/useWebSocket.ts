@@ -44,7 +44,9 @@ export function useWebSocket() {
         try {
           const msg = JSON.parse(e.data) as ServerMessage
           handleMessage(msg)
-        } catch { /* ignore */ }
+        } catch (err) {
+          console.error('[WS] message handling error:', err)
+        }
       }
 
       ws.onclose = () => {
@@ -71,6 +73,9 @@ export function useWebSocket() {
     }
 
     function handleMessage(msg: ServerMessage) {
+      if (msg.type.startsWith('debug_')) {
+        console.log('[WS] debug message received:', msg.type, msg)
+      }
       const s = store.getState()
 
       switch (msg.type) {
@@ -91,7 +96,18 @@ export function useWebSocket() {
 
         case 'voices':
           s.appendVoices(msg.voices)
+          // Inline voices into narrative flow
+          for (const v of msg.voices) {
+            s.appendNarrative(`[${v.trait_id}] ${v.line}`, 'voice')
+          }
           break
+
+        case 'check': {
+          const result = msg.passed ? '成功' : '失败'
+          const line = `🎲 ${msg.attribute}检定: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs 目标${msg.target} → ${result}`
+          s.appendNarrative(line, msg.passed ? 'check-pass' : 'check-fail')
+          break
+        }
 
         case 'status':
           s.setStatus(msg.location, msg.turn)
@@ -123,9 +139,13 @@ export function useWebSocket() {
           s.appendNarrative('', 'spacer')
           s.appendNarrative('─────────────────────────────', 'separator')
           s.appendNarrative('', 'spacer')
-          s.setInputEnabled(true)
+          // Don't enable input yet — wait for char creation to complete
           break
         }
+
+        case 'char_create':
+          s.setCharCreate({ attributes: msg.attributes, meta: msg.attribute_meta })
+          break
 
         case 'save_result':
           s.appendNarrative(`[系统] 存档成功: ${msg.saveId.slice(0, 8)}…`, 'system')
@@ -136,6 +156,34 @@ export function useWebSocket() {
           break
 
         case 'pong':
+          break
+
+        case 'debug_turn_start':
+          s.debugTurnStart(msg.turn, msg.input)
+          break
+
+        case 'debug_step':
+          s.debugStepEvent({
+            step: msg.step,
+            phase: msg.phase,
+            status: msg.status,
+            duration_ms: msg.duration_ms,
+            data: msg.data,
+            timestamp: Date.now(),
+          })
+          break
+
+        case 'debug_state':
+          s.debugSetState(msg.states)
+          break
+
+        case 'reset_complete':
+          s.resetGame()
+          s.appendNarrative('游戏已重置。', 'system')
+          // Re-initialize
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'initialize' }))
+          }
           break
       }
     }

@@ -27,7 +27,7 @@ import {
   VoiceGenerationStep,
   DebateStep,
   InsistenceStep,
-  WeightUpdateStep,
+  VoiceWriteStep,
 } from './steps/reflection-steps.js'
 
 // Arbitration steps
@@ -274,7 +274,7 @@ function buildPipeline(deps: {
 
   // ── Reflection Pipeline ──
   pipeline.addStep(
-    new ActiveTraitStep(signalProcessor),
+    new ActiveTraitStep(),
     (prevOutput, context) => context.data.get('parsed_intent') as any,
   )
   pipeline.addStep(new InjectionReadStep())
@@ -282,7 +282,7 @@ function buildPipeline(deps: {
   pipeline.addStep(new VoiceGenerationStep(agentRunner))
   pipeline.addStep(new DebateStep(agentRunner))
   pipeline.addStep(new InsistenceStep())
-  pipeline.addStep(new WeightUpdateStep(signalProcessor))
+  pipeline.addStep(new VoiceWriteStep())
 
   // ── Arbitration Pipeline (single LLM feasibility check) ──
   pipeline.addStep(

@@ -1,0 +1,226 @@
+.debug-tab {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
+.debug-empty {
+  color: var(--status);
+  padding-top: 20px;
+  text-align: center;
+}
+
+/* Turn block */
+.debug-turn {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.debug-turn-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-turn-header:hover {
+  background: var(--border);
+}
+
+.debug-chevron {
+  color: var(--status);
+  font-size: 10px;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.debug-turn-label {
+  color: var(--title);
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.debug-turn-input {
+  color: var(--fg);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-turn-count {
+  color: var(--status);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.debug-turn-body {
+  padding: 4px 0;
+}
+
+/* Step node */
+.debug-step {
+  border-bottom: 1px solid var(--border);
+}
+
+.debug-step:last-child {
+  border-bottom: none;
+}
+
+.debug-step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 24px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-step-header:hover {
+  background: var(--bg-elevated);
+}
+
+.debug-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.debug-status-dot.ok { background: var(--system); }
+.debug-status-dot.running { background: var(--highlight); animation: pulse 1.5s infinite; }
+.debug-status-dot.short-circuit { background: var(--voice); }
+.debug-status-dot.error { background: var(--error); }
+
+.debug-step-name {
+  color: var(--fg);
+  font-family: monospace;
+  flex: 1;
+}
+
+.debug-step-time {
+  color: var(--status);
+  font-size: 11px;
+  font-family: monospace;
+}
+
+.debug-step-spinner {
+  color: var(--highlight);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.debug-step-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: bold;
+}
+
+.debug-step-tag.sc {
+  background: rgba(112, 160, 208, 0.2);
+  color: var(--voice);
+}
+
+.debug-step-tag.err {
+  background: rgba(208, 64, 64, 0.2);
+  color: var(--error);
+}
+
+.debug-expand-hint {
+  color: var(--status);
+  font-size: 11px;
+}
+
+.debug-step-data {
+  margin: 0;
+  padding: 8px 10px 8px 42px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-top: 1px solid var(--border);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* State block */
+.debug-state-block {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.debug-state-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-state-header:hover {
+  background: var(--border);
+}
+
+.debug-state-label {
+  color: var(--system);
+  font-weight: bold;
+}
+
+.debug-state-body {
+  padding: 0;
+}
+
+.debug-state-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.debug-state-section:last-child {
+  border-bottom: none;
+}
+
+.debug-state-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 24px;
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-state-section-header:hover {
+  background: var(--bg-elevated);
+}
+
+.debug-state-data {
+  margin: 0;
+  padding: 8px 10px 8px 42px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-top: 1px solid var(--border);
+  max-height: 300px;
+  overflow-y: auto;
+}

@@ -21,3 +21,6 @@
 .narrative-line.world-title { color: var(--title); font-weight: bold; font-size: 17px; }
 .narrative-line.player-intro { color: var(--system); }
 .narrative-line.separator { color: var(--title); font-weight: bold; }
+.narrative-line.voice { color: var(--voice); font-style: italic; padding-left: 12px; border-left: 2px solid var(--voice); }
+.narrative-line.check-pass { color: var(--system); font-weight: bold; padding: 4px 8px; background: rgba(96, 160, 96, 0.1); border-radius: 3px; }
+.narrative-line.check-fail { color: var(--error); font-weight: bold; padding: 4px 8px; background: rgba(208, 64, 64, 0.1); border-radius: 3px; }

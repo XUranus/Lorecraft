@@ -26,12 +26,20 @@ import {
 } from '../orchestration/steps/input-steps.js'
 import {
   ActiveTraitStep,
+  InjectionReadStep,
+  ShouldSpeakStep,
+  VoiceGenerationStep,
+  DebateStep,
+  InsistenceStep,
+  VoiceWriteStep,
 } from '../orchestration/steps/reflection-steps.js'
 import {
   ParallelQueryStep,
   FeasibilityCheckStep,
+  AttributeCheckStep,
   ArbitrationResultStep,
 } from '../orchestration/steps/arbitration-steps.js'
+import type { AttributeCheckResult } from '../orchestration/steps/arbitration-steps.js'
 import {
   EventContextStep,
   PacingCheckStep,
@@ -42,8 +50,11 @@ import {
   StateWritebackStep,
   EventBroadcastStep,
 } from '../orchestration/steps/event-steps.js'
+import type { ParsedIntent, InsistenceState } from '../domain/models/pipeline-io.js'
 import type { GenesisDocument } from '../domain/models/genesis.js'
 import type { LocationEdge } from '../domain/models/world.js'
+import type { PlayerAttributes } from '../domain/models/attributes.js'
+import { randomAllocate, validateAllocation, ATTRIBUTE_IDS, ATTRIBUTE_META } from '../domain/models/attributes.js'
 
 // ============================================================
 // Game State
@@ -64,10 +75,15 @@ export interface GameState {
 export interface GameEventListener {
   onNarrative(text: string, source: string): void
   onVoices(voices: Array<{ trait_id: string; line: string }>): void
+  onCheck?(check: AttributeCheckResult): void
   onStatus(location: string, turn: number): void
   onError(message: string): void
   onInitProgress(step: string): void
   onInitComplete(doc: GenesisDocument): void
+  onCharCreate?(attributes: PlayerAttributes, meta: Array<{ id: string; display_name: string; domain: string }>): void
+  onDebugTurnStart?(turn: number, input: string): void
+  onDebugStep?(step: string, phase: 'start' | 'end', status?: string, duration_ms?: number, data?: string): void
+  onDebugState?(states: Record<string, unknown>): void
 }
 
 // ============================================================
@@ -94,6 +110,9 @@ export class GameLoop {
 
   private gameState: GameState | null = null
   private listener: GameEventListener | null = null
+  private insistenceState: InsistenceState = 'NORMAL'
+  private pendingAttributes: PlayerAttributes | null = null
+  private awaitingCharConfirm = false
 
   constructor(provider: ILLMProvider, options?: { debug?: boolean | string }) {
     this.stateStore = new InMemoryStateStore()
@@ -182,15 +201,100 @@ export class GameLoop {
       }
 
       this.listener?.onInitComplete(doc)
-      this.listener?.onStatus(startLocation, 1)
 
-      // Show inciting event narrative
-      const inciting = doc.narrative_structure.inciting_event
-      this.listener?.onNarrative(inciting.narrative_text, 'inciting_event')
+      // Enter character creation phase: send random attributes
+      this.pendingAttributes = randomAllocate()
+      this.awaitingCharConfirm = true
+      const meta = ATTRIBUTE_IDS.map((id) => ({
+        id,
+        display_name: ATTRIBUTE_META[id].display_name,
+        domain: ATTRIBUTE_META[id].domain,
+      }))
+      this.listener?.onCharCreate?.(this.pendingAttributes, meta)
     } catch (err) {
       this.listener?.onError(`初始化失败: ${err instanceof Error ? err.message : String(err)}`)
       throw err
     }
+  }
+
+  rerollAttributes(): void {
+    if (!this.awaitingCharConfirm) return
+    this.pendingAttributes = randomAllocate()
+    const meta = ATTRIBUTE_IDS.map((id) => ({
+      id,
+      display_name: ATTRIBUTE_META[id].display_name,
+      domain: ATTRIBUTE_META[id].domain,
+    }))
+    this.listener?.onCharCreate?.(this.pendingAttributes, meta)
+  }
+
+  async confirmAttributes(attributes: PlayerAttributes): Promise<void> {
+    if (!this.awaitingCharConfirm || !this.gameState) {
+      this.listener?.onError('当前不在角色创建阶段')
+      return
+    }
+
+    const error = validateAllocation(attributes)
+    if (error) {
+      this.listener?.onError(`属性分配无效: ${error}`)
+      return
+    }
+
+    // Persist attributes
+    await this.stateStore.set(
+      `player:attributes:${this.gameState.playerCharacterId}`,
+      attributes,
+    )
+
+    // Store on genesis doc for reference
+    this.gameState.genesisDoc.characters.player_character.attributes = attributes
+
+    this.awaitingCharConfirm = false
+    this.pendingAttributes = null
+
+    // Now start the game proper
+    this.listener?.onStatus(this.gameState.currentLocation, this.gameState.currentTurn)
+    const inciting = this.gameState.genesisDoc.narrative_structure.inciting_event
+    this.listener?.onNarrative(inciting.narrative_text, 'inciting_event')
+  }
+
+  get isAwaitingCharConfirm(): boolean {
+    return this.awaitingCharConfirm
+  }
+
+  reset(): void {
+    // Re-create all in-memory stores, wiping all state
+    this.stateStore = new InMemoryStateStore()
+    this.eventStore = new InMemoryEventStore()
+    this.loreStore = new InMemoryLoreStore()
+    this.longTermMemoryStore = new InMemoryLongTermMemoryStore()
+    this.sessionStore = new InMemorySessionStore()
+    this.injectionQueueManager = new InMemoryInjectionQueueManager()
+    this.signalProcessor = new SignalProcessor(this.stateStore, this.configLoader.getTraitConfigs())
+    this.locationGraph = new LocationGraph([])
+    this.insistenceSM = new InsistenceStateMachine()
+    this.deadLetterQueue = new DeadLetterQueue()
+    this.eventBus = new EventBus(this.deadLetterQueue)
+    this.broadcastRouter = new BroadcastRouter(this.stateStore)
+
+    const intentGenerator = new NPCIntentGenerator(this.agentRunner, this.stateStore)
+    const tierManager = new NPCTierManager(this.stateStore)
+    this.agentScheduler = new AgentScheduler(this.stateStore, intentGenerator, tierManager, {
+      injectionQueueManager: this.injectionQueueManager,
+      deadLetterQueue: this.deadLetterQueue,
+    })
+    this.saveLoadSystem = new SaveLoadSystem(
+      this.stateStore,
+      this.eventStore,
+      this.sessionStore,
+      this.longTermMemoryStore,
+      this.injectionQueueManager,
+    )
+
+    this.gameState = null
+    this.insistenceState = 'NORMAL'
+    this.pendingAttributes = null
+    this.awaitingCharConfirm = false
   }
 
   async processInput(playerInput: string): Promise<void> {
@@ -207,6 +311,9 @@ export class GameLoop {
       this.gameState.currentTurn,
     )
 
+    // Emit debug turn start
+    this.listener?.onDebugTurnStart?.(this.gameState.currentTurn, playerInput)
+
     try {
       // Pre-load context for pipeline steps
       const subjectiveMemory = await this.stateStore.get<unknown>(
@@ -216,12 +323,77 @@ export class GameLoop {
         context.data.set('recent_context', subjectiveMemory)
       }
 
+      // Inject persisted insistence state
+      context.data.set('insistence_state', this.insistenceState)
+
+      // Inject player attributes for voices and checks
+      const playerAttrs = await this.stateStore.get<PlayerAttributes>(
+        `player:attributes:${this.gameState.playerCharacterId}`,
+      )
+      if (playerAttrs) {
+        context.data.set('player_attributes', playerAttrs)
+      }
+
       // Build and run the full pipeline
       const pipeline = this.buildMainPipeline()
+
+      // Attach streaming debug middleware
+      const listener = this.listener
+      pipeline.addMiddleware({
+        before(step_name, _input, _ctx) {
+          listener?.onDebugStep?.(step_name, 'start')
+        },
+        after(step_name, result, _ctx, duration_ms) {
+          const status = result.status
+          let data: string | undefined
+          try {
+            if (result.status === 'continue') {
+              data = JSON.stringify(result.data, null, 2)
+            } else if (result.status === 'short_circuit') {
+              data = JSON.stringify(result.output, null, 2)
+            } else if (result.status === 'error') {
+              data = JSON.stringify(result.error, null, 2)
+            }
+          } catch {
+            data = '[unserializable]'
+          }
+          // Truncate very large data to avoid flooding the WS
+          if (data && data.length > 4000) {
+            data = data.slice(0, 4000) + '\n... [truncated]'
+          }
+          listener?.onDebugStep?.(step_name, 'end', status, Math.round(duration_ms * 100) / 100, data)
+        },
+      })
+
       const result = await pipeline.execute(playerInput, context)
 
+      // Send voices BEFORE narrative — inner thoughts precede the action
       if (result) {
-        this.listener?.onNarrative(result.text, result.source)
+        if (result.source === 'reflection') {
+          // Reflection short-circuit: only voices, no narrative
+          const reflectionOutput = context.data.get('reflection_output') as
+            | { voices: Array<{ trait_id: string; line: string }> }
+            | undefined
+          if (reflectionOutput?.voices?.length) {
+            this.listener?.onVoices(reflectionOutput.voices)
+          }
+        } else {
+          // Normal flow: voices first, then check, then narrative
+          const voices = context.data.get('voice_lines') as
+            | Array<{ trait_id: string; line: string }>
+            | undefined
+          if (voices && voices.length > 0) {
+            this.listener?.onVoices(voices)
+          }
+
+          // Send attribute check result if one occurred
+          const check = context.data.get('attribute_check') as AttributeCheckResult | undefined
+          if (check?.needed) {
+            this.listener?.onCheck?.(check)
+          }
+
+          this.listener?.onNarrative(result.text, result.source)
+        }
 
         // If this was a rejection (short-circuit), write back to state for context continuity
         if (result.source === 'rejection') {
@@ -229,13 +401,8 @@ export class GameLoop {
         }
       }
 
-      // Check for voice lines in context
-      const voices = context.data.get('voice_lines') as
-        | Array<{ trait_id: string; line: string }>
-        | undefined
-      if (voices && voices.length > 0) {
-        this.listener?.onVoices(voices)
-      }
+      // Persist insistence state across turns
+      this.insistenceState = (context.data.get('insistence_state') as InsistenceState) ?? 'NORMAL'
 
       // Update game state
       this.gameState.currentTurn++
@@ -250,12 +417,42 @@ export class GameLoop {
 
       this.listener?.onStatus(this.gameState.currentLocation, this.gameState.currentTurn)
 
+      // Emit debug state snapshot
+      this.listener?.onDebugState?.(await this.collectDebugState())
+
       // End-of-turn async processing
       await this.agentScheduler.runEndOfTurn(this.gameState.currentTurn, null)
     } catch (err) {
       this.listener?.onError(
         `处理失败: ${err instanceof Error ? err.message : String(err)}`,
       )
+    }
+  }
+
+  private async collectDebugState(): Promise<Record<string, unknown>> {
+    if (!this.gameState) return {}
+    const pid = this.gameState.playerCharacterId
+    const [subjectiveMemory, objectiveState, traitWeights, playerAttributes] = await Promise.all([
+      this.stateStore.get<unknown>(`memory:subjective:${pid}`),
+      this.stateStore.get<unknown>(`world:objective:${pid}`),
+      Promise.all(
+        this.configLoader.getTraitConfigs().map(async (c) => ({
+          trait_id: c.trait_id,
+          ...(await this.stateStore.get<Record<string, unknown>>(`player:traits:${c.trait_id}`)),
+        })),
+      ),
+      this.stateStore.get<unknown>(`player:attributes:${pid}`),
+    ])
+    return {
+      game: {
+        turn: this.gameState.currentTurn,
+        location: this.gameState.currentLocation,
+        session: this.gameState.sessionId,
+      },
+      attributes: playerAttributes,
+      traits: traitWeights,
+      subjective_memory: subjectiveMemory,
+      objective_state: objectiveState,
     }
   }
 
@@ -307,16 +504,22 @@ export class GameLoop {
     pipeline.addStep(new ActionValidationStep())
     pipeline.addStep(new ToneSignalStep())
 
-    // Reflection stage (simplified)
-    pipeline.addStep(new ActiveTraitStep(this.signalProcessor))
+    // Reflection stage (attribute-based inner voices)
+    pipeline.addStep(new ActiveTraitStep())
+    pipeline.addStep(new InjectionReadStep())
+    pipeline.addStep(new ShouldSpeakStep())
+    pipeline.addStep(new VoiceGenerationStep(this.agentRunner))
+    pipeline.addStep(new DebateStep(this.agentRunner))
+    pipeline.addStep(new InsistenceStep())
+    pipeline.addStep(new VoiceWriteStep())
 
-    // Arbitration stage — single LLM feasibility check
-    pipeline.addStep(new ParallelQueryStep(this.stateStore, this.loreStore, this.eventStore), (prevOutput) => {
-      // Extract the single compound action from parsed intent
-      const actions = prevOutput?.atomic_actions ?? [prevOutput]
-      return Array.isArray(actions) ? actions[0] : actions
+    // Arbitration stage — feasibility + attribute check
+    pipeline.addStep(new ParallelQueryStep(this.stateStore, this.loreStore, this.eventStore), (_prevOutput, ctx) => {
+      const parsedIntent = ctx.data.get('parsed_intent') as ParsedIntent | undefined
+      return parsedIntent?.atomic_actions?.[0] ?? _prevOutput
     })
     pipeline.addStep(new FeasibilityCheckStep(this.agentRunner))
+    pipeline.addStep(new AttributeCheckStep(this.agentRunner))
     pipeline.addStep(new ArbitrationResultStep())
 
     // Event stage

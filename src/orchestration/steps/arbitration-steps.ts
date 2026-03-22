@@ -1,3 +1,4 @@
+import { z } from 'zod/v4'
 import type { IPipelineStep, PipelineContext, StepResult, NarrativeOutput } from '../pipeline/types.js'
 import type { AgentRunner } from '../../ai/runner/agent-runner.js'
 import type { IStateStore, ILoreStore, IEventStore } from '../../infrastructure/storage/interfaces.js'
@@ -6,6 +7,8 @@ import type {
   ArbitrationResult,
   ArbitrationReport,
 } from '../../domain/models/pipeline-io.js'
+import type { PlayerAttributes } from '../../domain/models/attributes.js'
+import { ATTRIBUTE_IDS, ATTRIBUTE_META } from '../../domain/models/attributes.js'
 import { ArbitrationReportSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
 
@@ -141,6 +144,140 @@ export class FeasibilityCheckStep implements IPipelineStep<AtomicAction, AtomicA
           recoverable: false,
         },
       }
+    }
+  }
+}
+
+// ============================================================
+// AttributeCheckStep — d100 + attribute vs target (DM decides)
+// ============================================================
+
+export interface AttributeCheckResult {
+  needed: boolean
+  attribute_id?: string
+  attribute_display_name?: string
+  target?: number
+  roll?: number
+  attribute_value?: number
+  total?: number
+  passed?: boolean
+}
+
+const CheckDecisionSchema = z.object({
+  needs_check: z.boolean(),
+  attribute: z.string().nullable(),
+  target: z.number().int().min(1).max(200).nullable(),
+  reason: z.string().nullable(),
+})
+
+export class AttributeCheckStep implements IPipelineStep<AtomicAction, AtomicAction> {
+  readonly name = 'AttributeCheckStep'
+  private readonly agentRunner: AgentRunner
+  private readonly parser = new ResponseParser(CheckDecisionSchema)
+
+  constructor(agentRunner: AgentRunner) {
+    this.agentRunner = agentRunner
+  }
+
+  async execute(input: AtomicAction, context: PipelineContext): Promise<StepResult<AtomicAction>> {
+    const attrs = context.data.get('player_attributes') as PlayerAttributes | undefined
+    if (!attrs) {
+      context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
+      return { status: 'continue', data: input }
+    }
+
+    const subjectiveMemory = context.data.get('subjective_memory')
+    const objectiveState = context.data.get('objective_state')
+
+    const attrList = ATTRIBUTE_IDS.map((id) => `${ATTRIBUTE_META[id].display_name}(${id}): ${attrs[id]} — ${ATTRIBUTE_META[id].domain}`).join('\n')
+
+    const systemPrompt = [
+      'You are the DM (Dungeon Master) for a CRPG engine.',
+      'Decide if the player\'s action requires an attribute check (skill check).',
+      '',
+      'WHEN TO REQUIRE A CHECK:',
+      '- Actions with uncertain outcomes that depend on character ability',
+      '- Physical challenges: climbing, fighting, dodging, chasing, sneaking',
+      '- Mental challenges: deciphering, recalling knowledge, resisting pressure',
+      '- Social challenges: persuading, deceiving, intimidating',
+      '- Perception: spotting hidden details, reading body language, noticing danger',
+      '',
+      'WHEN NOT TO REQUIRE A CHECK:',
+      '- Trivial actions anyone could do (walking, talking normally, looking around casually)',
+      '- Pure narrative/roleplaying choices with no skill dependency',
+      '- Actions already blocked by feasibility (physically impossible)',
+      '',
+      'TARGET VALUE GUIDELINES (d100 + attribute >= target to pass):',
+      '- 30-50: Easy — most characters can do this',
+      '- 51-80: Moderate — needs decent ability',
+      '- 81-110: Hard — needs high ability or luck',
+      '- 111-140: Very Hard — needs exceptional ability',
+      '- 141+: Near Impossible — only the most gifted can attempt',
+      '',
+      `Player attributes:\n${attrList}`,
+      '',
+      'Choose the MOST relevant single attribute for the check.',
+      'Respond with ONLY valid JSON: { "needs_check": boolean, "attribute": "attribute_id"|null, "target": number|null, "reason": string|null }',
+    ].join('\n')
+
+    const userMessage = JSON.stringify({
+      action: input,
+      subjective_memory: subjectiveMemory,
+      objective_world_state: objectiveState,
+    })
+
+    try {
+      const response = await this.agentRunner.run(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        { agent_type: 'CheckDM' },
+      )
+
+      const result = this.parser.parse(response.content)
+
+      if (!result.success || !result.data.needs_check || !result.data.attribute || !result.data.target) {
+        context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
+        return { status: 'continue', data: input }
+      }
+
+      const decision = result.data
+      const target = decision.target!
+      const attrId = decision.attribute as keyof PlayerAttributes
+      const meta = ATTRIBUTE_META[attrId as typeof ATTRIBUTE_IDS[number]]
+      if (!meta) {
+        context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
+        return { status: 'continue', data: input }
+      }
+
+      // Roll d100
+      const roll = Math.floor(Math.random() * 100) + 1
+      const attrValue = attrs[attrId] ?? 0
+      const total = roll + attrValue
+      const passed = total >= target
+
+      const checkResult: AttributeCheckResult = {
+        needed: true,
+        attribute_id: attrId,
+        attribute_display_name: meta.display_name,
+        target,
+        roll,
+        attribute_value: attrValue,
+        total,
+        passed,
+      }
+
+      context.data.set('attribute_check', checkResult)
+      // Store pass/fail for EventGenerator to use
+      context.data.set('check_passed', passed)
+      context.data.set('check_description', `${meta.display_name}检定: d100(${roll}) + ${meta.display_name}(${attrValue}) = ${total} vs 目标${decision.target} → ${passed ? '成功' : '失败'}`)
+
+      return { status: 'continue', data: input }
+    } catch (err) {
+      // On error, skip the check
+      context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
+      return { status: 'continue', data: input }
     }
   }
 }
