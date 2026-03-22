@@ -24,6 +24,7 @@ export {
 export {
   AgentRunner,
   AnthropicProvider,
+  GeminiProvider,
   ResponseParser,
   PromptRegistry,
   TokenBudgetManager,

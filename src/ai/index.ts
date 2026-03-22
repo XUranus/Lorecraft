@@ -2,6 +2,7 @@
 export type { ILLMProvider, LLMMessage, LLMResponse } from './runner/llm-provider.js'
 export { AnthropicProvider } from './runner/anthropic-provider.js'
 export type { AnthropicProviderOptions } from './runner/anthropic-provider.js'
+export { GeminiProvider } from './runner/gemini-provider.js'
 export { AgentRunner } from './runner/agent-runner.js'
 export type { LLMCallLog, AgentRunnerOptions } from './runner/agent-runner.js'
 
