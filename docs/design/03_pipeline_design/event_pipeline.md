@@ -14,6 +14,7 @@ Step 1: 组装事件生成上下文（ContextAssembler）
 
 Step 2: EventGenerator LLM 调用（AI 层）
   - 生成 { title, tags, weight, summary, context, narrative_text, state_changes }
+  - 忠实执行玩家行为，社交失当的行为由世界产生合理后果（NPC 愤怒、卫兵介入等）
   - force_level > 0 时，Prompt 指令区包含负面后果权重提示
 
 Step 3: 事件 Schema 校验（ResponseParser）

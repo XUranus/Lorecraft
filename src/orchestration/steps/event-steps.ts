@@ -160,6 +160,7 @@ export class EventGeneratorStep
     const systemPrompt = [
       'You are the EventGenerator agent for a CRPG engine.',
       'Generate a complete event from the given action and context.',
+      'IMPORTANT: The player has full freedom to roleplay ANY personality. If the action is socially reckless, rude, absurd, or provocative, DO NOT soften or redirect it — faithfully execute the action and let the WORLD react with realistic consequences (NPCs get angry, guards intervene, allies lose trust, opportunities close, etc.). The player chose this; honor their agency.',
       forceInstruction,
       pacingInstruction,
       'Respond with ONLY valid JSON: { "title": string, "tags": string[], "weight": "PRIVATE"|"MINOR"|"SIGNIFICANT"|"MAJOR", "summary": string, "context": string, "narrative_text": string, "state_changes": [{ "target": string, "field": string, "change_description": string }] }',

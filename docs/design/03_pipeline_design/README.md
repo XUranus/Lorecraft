@@ -49,7 +49,7 @@ Step 2: ReflectionPipeline
   [短路条件] 拦截时 → 返回声音文本，等待玩家确认
     ↓
 Step 3: ArbitrationPipeline
-  五层可行性检查
+  四维可行性检查（信息/物理/逻辑/漂移）
   [短路条件] 不通过 → 返回叙事拒绝文本
     ↓
 Step 4: EventPipeline
