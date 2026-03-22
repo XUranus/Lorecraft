@@ -45,6 +45,8 @@ export class TUIApp implements GameEventListener {
     // Create screen
     this.screen = blessed.screen({
       smartCSR: true,
+      fullUnicode: true,
+      forceUnicode: true,
       title: 'Lorecraft',
       cursor: { shape: 'line', blink: true, color: COLORS.highlight, artificial: true },
     })
