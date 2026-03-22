@@ -13,3 +13,24 @@ export { NPCTierManager } from './npc-tier-manager.js'
 export type { NPCTierManagerConfig } from './npc-tier-manager.js'
 export { ConversationManager } from './conversation-manager.js'
 export { AgentScheduler } from './agent-scheduler.js'
+
+// Phase 4: Async Systems
+export {
+  EventBus,
+  BroadcastRouter,
+  DeadLetterQueue,
+  AsyncCompletionGuard,
+} from './event-bus.js'
+export type {
+  EventSubscriber,
+  DeadLetterEntry,
+  RoutingResult,
+} from './event-bus.js'
+export { InMemoryInjectionQueueManager } from './injection-queue-manager.js'
+export type { IInjectionQueueManager } from './injection-queue-manager.js'
+export { NarrativeRailAgent } from './narrative-rail-agent.js'
+export type { DriftAssessment, InterventionResult } from './narrative-rail-agent.js'
+export { LoreCanonicalizer } from './lore-canonicalizer.js'
+export type { ExtractedFact, ConsistencyVerdict } from './lore-canonicalizer.js'
+export { PropagationScheduler } from './propagation-scheduler.js'
+export type { PropagationEntry } from './propagation-scheduler.js'

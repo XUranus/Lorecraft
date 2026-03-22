@@ -63,6 +63,38 @@ export {
   SignalProcessor,
   LocationGraph,
   InsistenceStateMachine,
+  WorldAgent,
+  NPCResponseGenerator,
+  SubjectiveMemoryGenerator,
+  NPCIntentGenerator,
+  NPCTierManager,
+  ConversationManager,
+  AgentScheduler,
+  // Phase 4
+  EventBus,
+  BroadcastRouter,
+  DeadLetterQueue,
+  AsyncCompletionGuard,
+  InMemoryInjectionQueueManager,
+  NarrativeRailAgent,
+  LoreCanonicalizer,
+  PropagationScheduler,
 } from './domain/services/index.js'
 
-export type { TraversalContext } from './domain/services/index.js'
+export type {
+  TraversalContext,
+  NPCResponseResult,
+  MemoryEventInput,
+  NPCIntentResult,
+  NPCTierManagerConfig,
+  // Phase 4
+  EventSubscriber,
+  DeadLetterEntry,
+  RoutingResult,
+  IInjectionQueueManager,
+  DriftAssessment,
+  InterventionResult,
+  ExtractedFact,
+  ConsistencyVerdict,
+  PropagationEntry,
+} from './domain/services/index.js'
