@@ -31,6 +31,13 @@ class WsBridge implements GameEventListener {
     this.ws = null
   }
 
+  /** Only detach if the given ws is still the active connection */
+  detachIf(ws: WebSocket): void {
+    if (this.ws === ws) {
+      this.ws = null
+    }
+  }
+
   get connected(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN
   }
@@ -165,18 +172,12 @@ export class GameServer {
       }
 
       this.wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
-        // Detach previous client if any
+        // Detach previous client if any (safe: won't affect new ws)
         this.bridge.detach()
         this.bridge.attach(ws)
 
-        // Replay history to the new client if there's anything to replay
-        if (this.bridge.history.length > 0) {
-          this.bridge.sendDirect({ type: 'history', messages: this.bridge.history })
-          // If still in char creation, re-trigger char_create so overlay shows
-          if (this.gameLoop.isAwaitingCharConfirm) {
-            this.gameLoop.rerollAttributes()
-          }
-        }
+        // Don't send history here — wait for client's 'initialize' message
+        // to avoid race condition with old ws close event
 
         ws.on('message', async (data) => {
           try {
@@ -188,11 +189,11 @@ export class GameServer {
         })
 
         ws.on('close', () => {
-          this.bridge.detach()
+          this.bridge.detachIf(ws)
         })
 
         ws.on('error', () => {
-          this.bridge.detach()
+          this.bridge.detachIf(ws)
         })
       })
 
