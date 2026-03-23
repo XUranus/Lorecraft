@@ -14,12 +14,58 @@ export interface StyleConfig {
   player_archetype: string
 }
 
-export const DEFAULT_STYLE_CONFIG: StyleConfig = {
-  tone: '黑色政治惊悚，充满阴谋与道德灰色地带',
-  complexity: 'MEDIUM',
-  narrative_style: '写实风格，注重心理描写和环境氛围',
-  player_archetype: '身陷权力漩涡的调查者',
+// ── Style Presets ──
+
+export const STYLE_PRESETS: StyleConfig[] = [
+  {
+    tone: '黑色政治惊悚，充满阴谋与道德灰色地带',
+    complexity: 'MEDIUM',
+    narrative_style: '写实风格，注重心理描写和环境氛围',
+    player_archetype: '身陷权力漩涡的调查者',
+  },
+  {
+    tone: '哥特恐怖，维多利亚时代的阴郁庄园与超自然秘密',
+    complexity: 'MEDIUM',
+    narrative_style: '古典文学风格，辞藻华丽，气氛压抑，善用暗示与隐喻',
+    player_archetype: '受邀前往偏远庄园的访客，发现真相远比传闻可怖',
+  },
+  {
+    tone: '西部荒野，法外之地的暴力与荣耀，灰尘与鲜血',
+    complexity: 'LOW',
+    narrative_style: '粗犷硬朗，对白简练有力，注重动作场面与道德抉择',
+    player_archetype: '流浪枪手，在蛮荒小镇卷入一场牵动多方的恩怨',
+  },
+  {
+    tone: '奇幻史诗，古老预言、种族纷争与即将苏醒的远古之恶',
+    complexity: 'HIGH',
+    narrative_style: '史诗叙事，宏大而细腻，融合战争场面与个人命运',
+    player_archetype: '被卷入预言的普通人，逐渐发现自己与古老力量的联系',
+  },
+  {
+    tone: '江湖武侠，庙堂与江湖交织，刀光剑影下的恩怨情仇',
+    complexity: 'MEDIUM',
+    narrative_style: '古典武侠风格，意境深远，打斗写意，重义轻利',
+    player_archetype: '身世成谜的游侠，被一封血书引入江湖纷争',
+  },
+  {
+    tone: '末日废土，文明崩塌后的荒原求生，资源争夺与人性考验',
+    complexity: 'LOW',
+    narrative_style: '冷峻克制，环境描写粗粝真实，对话务实简短',
+    player_archetype: '废土拾荒者，在一次交易中意外获得改变力量格局的关键物资',
+  },
+  {
+    tone: '太空歌剧，星际殖民时代的政治博弈、异星探索与文明冲突',
+    complexity: 'HIGH',
+    narrative_style: '科幻风格，兼具硬科幻的严谨与太空歌剧的浪漫，注重异星文化描写',
+    player_archetype: '边境星系的独立船长，被迫在帝国、叛军与未知文明之间抉择',
+  },
+]
+
+export function randomStylePreset(): StyleConfig {
+  return STYLE_PRESETS[Math.floor(Math.random() * STYLE_PRESETS.length)]
 }
+
+export const DEFAULT_STYLE_CONFIG: StyleConfig = STYLE_PRESETS[0]
 
 // ============================================================
 // Cognitive Voice Config

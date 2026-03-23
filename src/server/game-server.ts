@@ -172,6 +172,7 @@ export class GameServer {
       }
 
       this.wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
+        console.log('[GS] new connection, bridge.ws exists:', this.bridge.connected, 'history:', this.bridge.history.length, 'initialized:', this.initialized)
         // Detach previous client if any (safe: won't affect new ws)
         this.bridge.detach()
         this.bridge.attach(ws)
@@ -189,10 +190,13 @@ export class GameServer {
         })
 
         ws.on('close', () => {
+          const wasCurrent = this.bridge.connected
           this.bridge.detachIf(ws)
+          console.log('[GS] ws close, was current:', wasCurrent, 'bridge still connected:', this.bridge.connected)
         })
 
-        ws.on('error', () => {
+        ws.on('error', (err) => {
+          console.log('[GS] ws error:', err.message)
           this.bridge.detachIf(ws)
         })
       })
@@ -218,10 +222,14 @@ export class GameServer {
         break
 
       case 'initialize':
+        console.log('[GS] initialize msg — initialized:', this.initialized, 'awaitingChar:', this.gameLoop.isAwaitingCharConfirm, 'initializing:', this.initializing, 'history:', this.bridge.history.length, 'bridge connected:', this.bridge.connected)
         if (this.initialized || this.gameLoop.isAwaitingCharConfirm) {
           // Already in progress or done — replay history instead of re-initializing
           if (this.bridge.history.length > 0) {
+            console.log('[GS] sending history replay, messages:', this.bridge.history.length, 'types:', this.bridge.history.map(m => m.type).join(','))
             this.bridge.sendDirect({ type: 'history', messages: this.bridge.history })
+          } else {
+            console.log('[GS] WARNING: initialized but history is empty!')
           }
           if (this.gameLoop.isAwaitingCharConfirm) {
             this.gameLoop.rerollAttributes()

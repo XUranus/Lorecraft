@@ -23,6 +23,7 @@ export function useWebSocket() {
       wsRef.current = ws
 
       ws.onopen = () => {
+        console.log('[WS] onopen fired')
         store.getState().setConnectionStatus('connected')
         store.getState().setSend((msg) => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -30,6 +31,7 @@ export function useWebSocket() {
           }
         })
         store.getState().appendNarrative('已连接到服务器…', 'system')
+        console.log('[WS] sending initialize')
         ws.send(JSON.stringify({ type: 'initialize' }))
 
         // Heartbeat
@@ -43,6 +45,7 @@ export function useWebSocket() {
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data) as ServerMessage
+          console.log('[WS] received:', msg.type, msg.type === 'history' ? `(${(msg as any).messages?.length} msgs)` : '')
           handleMessage(msg)
         } catch (err) {
           console.error('[WS] message handling error:', err)
@@ -184,6 +187,7 @@ export function useWebSocket() {
           break
 
         case 'history': {
+          console.log('[WS] history replay start, messages:', msg.messages.length, 'types:', msg.messages.map((m: any) => m.type))
           // Reconnect: clear narrative and replay all history
           s.resetGame()
           for (const m of msg.messages) {
@@ -191,14 +195,21 @@ export function useWebSocket() {
           }
           // Re-enable input if game was in progress
           const rs = store.getState()
+          console.log('[WS] history replay done — initDoc:', !!rs.initDoc, 'charCreate:', !!rs.charCreate, 'turn:', rs.turn, 'narrativeLines:', rs.narrativeLines.length, 'insistencePrompt:', rs.insistencePrompt)
           if (rs.initDoc) {
             // If game is past char creation (has turns), clear stale charCreate
             if (rs.charCreate && rs.turn > 0) {
+              console.log('[WS] clearing stale charCreate (turn > 0)')
               rs.setCharCreate(null)
             }
             if (!store.getState().charCreate && !rs.insistencePrompt) {
+              console.log('[WS] enabling input')
               store.getState().setInputEnabled(true)
+            } else {
+              console.log('[WS] NOT enabling input — charCreate:', !!store.getState().charCreate, 'insistencePrompt:', rs.insistencePrompt)
             }
+          } else {
+            console.log('[WS] NOT enabling input — no initDoc')
           }
           break
         }

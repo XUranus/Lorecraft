@@ -9,7 +9,7 @@ import { MainPipeline, createPipelineContext } from '../orchestration/pipeline/i
 import type { NarrativeOutput } from '../orchestration/pipeline/types.js'
 import { InitializationAgent } from '../domain/services/initialization-agent.js'
 import { SaveLoadSystem } from '../domain/services/save-load-system.js'
-import { ExtensionConfigLoader } from '../domain/services/extension-config.js'
+import { ExtensionConfigLoader, randomStylePreset } from '../domain/services/extension-config.js'
 import { InMemoryInjectionQueueManager } from '../domain/services/injection-queue-manager.js'
 import { SignalProcessor } from '../domain/services/signal-processor.js'
 import { LocationGraph } from '../domain/services/location-graph.js'
@@ -160,7 +160,11 @@ export class GameLoop {
 
   async initialize(): Promise<void> {
     this.agentRunner.markTurn(0, '[INITIALIZATION]')
-    this.listener?.onInitProgress('正在生成游戏世界…')
+
+    // Pick a random style for this game
+    const style = randomStylePreset()
+    this.configLoader = new ExtensionConfigLoader({ style })
+    this.listener?.onInitProgress(`正在生成游戏世界… [${style.tone.slice(0, 20)}]`)
 
     const initAgent = new InitializationAgent({
       agentRunner: this.agentRunner,
