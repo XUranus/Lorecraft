@@ -43,6 +43,10 @@ class WsBridge implements GameEventListener {
     this._history = []
   }
 
+  removeFromHistory(type: string): void {
+    this._history = this._history.filter((m) => m.type !== type)
+  }
+
   send(msg: ServerMessage): void {
     if (HISTORY_TYPES.has(msg.type)) {
       this._history.push(msg)
@@ -258,6 +262,8 @@ export class GameServer {
         try {
           await this.gameLoop.confirmAttributes(msg.attributes as unknown as PlayerAttributes)
           this.initialized = true
+          // Char creation is done — remove char_create from history so reconnect won't re-show overlay
+          this.bridge.removeFromHistory('char_create')
         } catch (err) {
           this.bridge.send({
             type: 'error',

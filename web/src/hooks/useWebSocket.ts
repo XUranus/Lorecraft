@@ -183,17 +183,25 @@ export function useWebSocket() {
           s.debugSetState(msg.states)
           break
 
-        case 'history':
+        case 'history': {
           // Reconnect: clear narrative and replay all history
           s.resetGame()
           for (const m of msg.messages) {
             handleMessage(m)
           }
           // Re-enable input if game was in progress
-          if (store.getState().initDoc && !store.getState().charCreate) {
-            store.getState().setInputEnabled(true)
+          const rs = store.getState()
+          if (rs.initDoc) {
+            // If game is past char creation (has turns), clear stale charCreate
+            if (rs.charCreate && rs.turn > 0) {
+              rs.setCharCreate(null)
+            }
+            if (!store.getState().charCreate && !rs.insistencePrompt) {
+              store.getState().setInputEnabled(true)
+            }
           }
           break
+        }
 
         case 'reset_complete':
           s.resetGame()
