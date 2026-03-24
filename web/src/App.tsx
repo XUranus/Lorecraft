@@ -5,11 +5,11 @@ import { TabBar } from './components/TabBar'
 import { BottomBar } from './components/BottomBar'
 import { StyleSelectOverlay } from './components/StyleSelectOverlay'
 import { CharCreateOverlay } from './components/CharCreateOverlay'
+import { SessionOverlay } from './components/SessionOverlay'
 import { tabs } from './tabs/registry'
 
 // Import tabs so they self-register
 import './tabs/NarrativeTab'
-import './tabs/VoicesTab'
 import './tabs/DebugTab'
 
 export function App() {
@@ -28,6 +28,7 @@ export function App() {
       <BottomBar />
       <StyleSelectOverlay />
       <CharCreateOverlay />
+      <SessionOverlay />
     </div>
   )
 }

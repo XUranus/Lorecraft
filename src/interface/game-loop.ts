@@ -1,6 +1,7 @@
 import type { ILLMProvider } from '../ai/runner/llm-provider.js'
 import { AgentRunner } from '../ai/runner/agent-runner.js'
 import { SQLiteStore } from '../infrastructure/storage/sqlite-store.js'
+import type { SessionInfo } from '../infrastructure/storage/sqlite-store.js'
 import type { IStateStore, IEventStore, ILoreStore, ILongTermMemoryStore, ISessionStore } from '../infrastructure/storage/interfaces.js'
 import { MainPipeline, PipelineExecutionError, createPipelineContext } from '../orchestration/pipeline/index.js'
 import type { NarrativeOutput } from '../orchestration/pipeline/types.js'
@@ -79,6 +80,7 @@ export interface GameEventListener {
   onStatus(location: string, turn: number): void
   onError(message: string, retryable?: boolean): void
   onStyleSelect?(presets: Array<{ label: string; description: string }>): void
+  onSessionList?(sessions: Array<{ id: string; label: string; turn: number; location: string; updated_at: number }>): void
   onInitProgress(step: string): void
   onInitComplete(doc: GenesisDocument): void
   onCharCreate?(attributes: PlayerAttributes, meta: Array<{ id: string; display_name: string; domain: string }>): void
@@ -282,6 +284,18 @@ export class GameLoop {
 
     this.awaitingCharConfirm = false
     this.pendingAttributes = null
+
+    // Create a session record
+    const worldSetting = this.gameState.genesisDoc.world_setting
+    const label = worldSetting?.tone ?? '未命名世界'
+    this.sqliteStore.createSession(
+      this.gameState.sessionId,
+      this.gameState.genesisDoc.id,
+      label,
+    )
+    this.sqliteStore.updateSession(this.gameState.sessionId, {
+      location: this.gameState.currentLocation,
+    })
 
     // Now start the game proper
     this.listener?.onStatus(this.gameState.currentLocation, this.gameState.currentTurn)
@@ -504,6 +518,12 @@ export class GameLoop {
 
       this.listener?.onStatus(this.gameState.currentLocation, this.gameState.currentTurn)
 
+      // Update session record
+      this.sqliteStore.updateSession(this.gameState.sessionId, {
+        turn: this.gameState.currentTurn,
+        location: this.gameState.currentLocation,
+      })
+
       // Emit debug state snapshot
       this.listener?.onDebugState?.(await this.collectDebugState())
 
@@ -566,6 +586,17 @@ export class GameLoop {
       this.gameState.genesisDoc.id,
       this.gameState.currentTurn,
     )
+  }
+
+  /** Persist message history for the current session */
+  async saveSessionHistory(history: unknown[]): Promise<void> {
+    if (!this.gameState) return
+    await this.stateStore.set(`session:${this.gameState.sessionId}:history`, history)
+  }
+
+  /** Load message history for a given session */
+  async loadSessionHistory(sessionId: string): Promise<unknown[] | null> {
+    return this.stateStore.get<unknown[]>(`session:${sessionId}:history`)
   }
 
   getGameState(): GameState | null {
@@ -696,5 +727,69 @@ export class GameLoop {
     pipeline.addStep(new EventBroadcastStep())
 
     return pipeline
+  }
+
+  // ---- Session Management ----
+
+  listSessions(): SessionInfo[] {
+    return this.sqliteStore.listSessions()
+  }
+
+  /** Check if there's an active session that can be resumed */
+  getActiveSession(): SessionInfo | null {
+    return this.sqliteStore.getActiveSession()
+  }
+
+  /** Resume an existing session by loading its genesis doc and state */
+  async switchSession(sessionId: string): Promise<boolean> {
+    const sessions = this.sqliteStore.listSessions()
+    const target = sessions.find((s) => s.id === sessionId)
+    if (!target) return false
+
+    // Load genesis doc
+    const doc = await this.sessionStore.loadGenesis(target.genesis_id)
+    if (!doc) return false
+
+    // Activate session
+    this.sqliteStore.activateSession(sessionId)
+
+    // Rebuild game state
+    this.gameState = {
+      genesisDoc: doc,
+      currentTurn: target.turn,
+      playerCharacterId: doc.characters.player_character.id,
+      sessionId: target.id,
+      currentLocation: target.location,
+    }
+
+    // Load player attributes
+    const attrs = await this.stateStore.get<PlayerAttributes>(
+      `player:attributes:${this.gameState.playerCharacterId}`,
+    )
+    if (attrs) {
+      this.gameState.genesisDoc.characters.player_character.attributes = attrs
+    }
+
+    // Load location graph
+    const edges = await this.stateStore.get<LocationEdge[]>('world:location_edges')
+    if (edges) {
+      this.locationGraph = new LocationGraph(edges)
+    }
+
+    // Reset runtime state
+    this.insistenceState = 'NORMAL'
+    this.pendingInsistInput = null
+    this.awaitingCharConfirm = false
+    this.awaitingStyleSelect = false
+
+    return true
+  }
+
+  deleteSession(sessionId: string): void {
+    this.sqliteStore.deleteSession(sessionId)
+    // If we deleted the active session, clear game state
+    if (this.gameState?.sessionId === sessionId) {
+      this.gameState = null
+    }
   }
 }

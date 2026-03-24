@@ -577,6 +577,92 @@ export class SQLiteStore {
       this.db.exec('DELETE FROM injections')
       this.db.exec('DELETE FROM kv_store')
       this.db.exec('DELETE FROM genesis')
+      this.db.exec('DELETE FROM sessions')
     })()
   }
+
+  // ──────────────────────────────────────────────
+  // Session Management
+  // ──────────────────────────────────────────────
+
+  createSession(id: string, genesisId: string, label: string): void {
+    this.db.prepare(
+      'INSERT INTO sessions (id, genesis_id, label, is_active) VALUES (?, ?, ?, 1)',
+    ).run(id, genesisId, label)
+    // Deactivate all other sessions
+    this.db.prepare('UPDATE sessions SET is_active = 0 WHERE id != ?').run(id)
+  }
+
+  updateSession(id: string, updates: { turn?: number; location?: string; label?: string }): void {
+    const parts: string[] = ['updated_at = unixepoch()']
+    const params: unknown[] = []
+    if (updates.turn !== undefined) { parts.push('turn = ?'); params.push(updates.turn) }
+    if (updates.location !== undefined) { parts.push('location = ?'); params.push(updates.location) }
+    if (updates.label !== undefined) { parts.push('label = ?'); params.push(updates.label) }
+    params.push(id)
+    this.db.prepare(`UPDATE sessions SET ${parts.join(', ')} WHERE id = ?`).run(...params)
+  }
+
+  activateSession(id: string): void {
+    this.db.transaction(() => {
+      this.db.prepare('UPDATE sessions SET is_active = 0').run()
+      this.db.prepare('UPDATE sessions SET is_active = 1 WHERE id = ?').run(id)
+    })()
+  }
+
+  getActiveSession(): SessionInfo | null {
+    const row = this.db.prepare(
+      'SELECT id, genesis_id, label, turn, location, created_at, updated_at FROM sessions WHERE is_active = 1',
+    ).get() as any
+    return row ? this.rowToSessionInfo(row) : null
+  }
+
+  listSessions(): SessionInfo[] {
+    const rows = this.db.prepare(
+      'SELECT id, genesis_id, label, turn, location, created_at, updated_at FROM sessions ORDER BY updated_at DESC',
+    ).all() as any[]
+    return rows.map((r) => this.rowToSessionInfo(r))
+  }
+
+  deleteSession(id: string): void {
+    // Get the session's genesis_id to check if we need to clean up genesis
+    const session = this.db.prepare('SELECT genesis_id FROM sessions WHERE id = ?').get(id) as any
+    if (!session) return
+
+    this.db.transaction(() => {
+      // Delete all data scoped to this session via kv_store prefix
+      this.db.prepare("DELETE FROM kv_store WHERE key LIKE ?").run(`session:${id}:%`)
+      this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
+
+      // Check if any other sessions reference this genesis
+      const count = this.db.prepare(
+        'SELECT COUNT(*) as cnt FROM sessions WHERE genesis_id = ?',
+      ).get(session.genesis_id) as any
+      if (count.cnt === 0) {
+        this.db.prepare('DELETE FROM genesis WHERE id = ?').run(session.genesis_id)
+      }
+    })()
+  }
+
+  private rowToSessionInfo(row: any): SessionInfo {
+    return {
+      id: row.id,
+      genesis_id: row.genesis_id,
+      label: row.label,
+      turn: row.turn,
+      location: row.location,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }
+  }
+}
+
+export interface SessionInfo {
+  id: string
+  genesis_id: string
+  label: string
+  turn: number
+  location: string
+  created_at: number
+  updated_at: number
 }

@@ -257,6 +257,10 @@ export function useWebSocket() {
           break
         }
 
+        case 'session_list':
+          s.setSessionList(msg.sessions)
+          break
+
         case 'reset_complete':
           s.resetGame()
           s.appendNarrative('游戏已重置。', 'system')

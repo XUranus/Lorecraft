@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3'
 // ============================================================
 // Schema version — bump when adding migrations
 // ============================================================
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 // ============================================================
 // Table creation SQL
@@ -21,6 +21,20 @@ CREATE TABLE IF NOT EXISTS genesis (
     id  TEXT PRIMARY KEY,
     doc TEXT NOT NULL
 );
+
+-- Sessions (each session = one playthrough of a genesis)
+CREATE TABLE IF NOT EXISTS sessions (
+    id          TEXT PRIMARY KEY,
+    genesis_id  TEXT NOT NULL REFERENCES genesis(id),
+    label       TEXT NOT NULL DEFAULT '',
+    turn        INTEGER NOT NULL DEFAULT 1,
+    location    TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+    is_active   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
 
 -- Generic KV store (replaces StateStore)
 CREATE TABLE IF NOT EXISTS kv_store (

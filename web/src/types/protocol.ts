@@ -11,6 +11,10 @@ export type ClientMessage =
   | { type: 'retry' }
   | { type: 'select_style'; preset_index: number }
   | { type: 'select_style_custom'; tone: string; narrative_style: string; player_archetype: string }
+  | { type: 'list_sessions' }
+  | { type: 'new_session' }
+  | { type: 'switch_session'; session_id: string }
+  | { type: 'delete_session'; session_id: string }
 
 export type ServerMessage =
   | { type: 'narrative'; text: string; source: string }
@@ -31,3 +35,4 @@ export type ServerMessage =
   | { type: 'history'; messages: ServerMessage[] }
   | { type: 'insistence_prompt' }
   | { type: 'style_select'; presets: Array<{ label: string; description: string }> }
+  | { type: 'session_list'; sessions: Array<{ id: string; label: string; turn: number; location: string; updated_at: number }> }

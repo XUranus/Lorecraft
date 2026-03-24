@@ -32,6 +32,16 @@ export function TitleBar() {
     setConfirmReset(false)
   }
 
+  function handleSave() {
+    send({ type: 'save' })
+    setMenuOpen(false)
+  }
+
+  function handleSessions() {
+    send({ type: 'list_sessions' })
+    setMenuOpen(false)
+  }
+
   return (
     <header className="title-bar">
       <span className="title-logo">&#9876; LORECRAFT</span>
@@ -46,6 +56,12 @@ export function TitleBar() {
           </button>
           {menuOpen && (
             <div className="settings-menu">
+              <button className="menu-item" onClick={handleSave}>
+                存档
+              </button>
+              <button className="menu-item" onClick={handleSessions}>
+                存档管理
+              </button>
               <button className="menu-item danger" onClick={handleReset}>
                 {confirmReset ? '确认重置？' : '重置游戏'}
               </button>

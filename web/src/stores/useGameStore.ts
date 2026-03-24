@@ -22,6 +22,14 @@ export interface CharCreateState {
   meta: AttributeMeta[]
 }
 
+export interface SessionEntry {
+  id: string
+  label: string
+  turn: number
+  location: string
+  updated_at: number
+}
+
 export interface DebugStepEntry {
   step: string
   phase: 'start' | 'end'
@@ -64,6 +72,9 @@ interface GameState {
   // Retryable error
   retryable: boolean
 
+  // Sessions
+  sessionList: SessionEntry[] | null
+
   // Debug
   debugTurns: DebugTurn[]
 
@@ -80,6 +91,7 @@ interface GameState {
   setCharCreate: (state: CharCreateState | null) => void
   setInsistencePrompt: (v: boolean) => void
   setRetryable: (v: boolean) => void
+  setSessionList: (sessions: SessionEntry[] | null) => void
   resetGame: () => void
   debugTurnStart: (turn: number, input: string) => void
   debugStepEvent: (entry: DebugStepEntry) => void
@@ -108,6 +120,8 @@ export const useGameStore = create<GameState>((set) => ({
 
   retryable: false,
 
+  sessionList: null,
+
   debugTurns: [],
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
@@ -127,6 +141,7 @@ export const useGameStore = create<GameState>((set) => ({
   setCharCreate: (charCreate) => set({ charCreate }),
   setInsistencePrompt: (insistencePrompt) => set({ insistencePrompt }),
   setRetryable: (retryable) => set({ retryable }),
+  setSessionList: (sessionList) => set({ sessionList }),
 
   resetGame: () =>
     set({
@@ -141,6 +156,7 @@ export const useGameStore = create<GameState>((set) => ({
       charCreate: null,
       insistencePrompt: false,
       retryable: false,
+      sessionList: null,
       debugTurns: [],
     }),
 

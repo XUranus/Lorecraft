@@ -7,4 +7,4 @@ echo "📦 Building frontend..."
 
 # Start backend (with web frontend) in watch mode
 echo "🚀 Starting server..."
-exec pnpm tsx watch src/main.ts --web --debug "$@"
+exec node --import tsx/esm --watch src/main.ts --web --debug "$@"

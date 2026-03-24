@@ -23,6 +23,11 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     narrative_style: z.string().min(1),
     player_archetype: z.string().min(1),
   }),
+  // Session management
+  z.object({ type: z.literal('list_sessions') }),
+  z.object({ type: z.literal('new_session') }),
+  z.object({ type: z.literal('switch_session'), session_id: z.string() }),
+  z.object({ type: z.literal('delete_session'), session_id: z.string() }),
 ])
 
 export type ClientMessage = z.infer<typeof ClientMessageSchema>
@@ -50,3 +55,4 @@ export type ServerMessage =
   | { type: 'history'; messages: ServerMessage[] }
   | { type: 'insistence_prompt' }
   | { type: 'style_select'; presets: Array<{ label: string; description: string }> }
+  | { type: 'session_list'; sessions: Array<{ id: string; label: string; turn: number; location: string; updated_at: number }> }

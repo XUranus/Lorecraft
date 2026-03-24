@@ -52,6 +52,10 @@ class WsBridge implements GameEventListener {
     this._history = []
   }
 
+  setHistory(messages: ServerMessage[]): void {
+    this._history = messages
+  }
+
   removeFromHistory(type: string): void {
     this._history = this._history.filter((m) => m.type !== type)
   }
@@ -258,7 +262,21 @@ export class GameServer {
           this.bridge.send({ type: 'init_progress', step: '正在初始化，请稍候…' })
           return
         }
-        // Start initialization — sends style_select to client
+        // Check for existing sessions before starting new game
+        {
+          const sessions = this.gameLoop.listSessions()
+          if (sessions.length > 0) {
+            this.bridge.sendDirect({
+              type: 'session_list',
+              sessions: sessions.map((s) => ({
+                id: s.id, label: s.label, turn: s.turn,
+                location: s.location, updated_at: s.updated_at,
+              })),
+            })
+            return
+          }
+        }
+        // No sessions — start initialization (sends style_select to client)
         await this.gameLoop.initialize()
         break
 
@@ -313,6 +331,8 @@ export class GameServer {
           this.initialized = true
           // Char creation is done — remove char_create from history so reconnect won't re-show overlay
           this.bridge.removeFromHistory('char_create')
+          // Persist initial history for session restore
+          await this.gameLoop.saveSessionHistory(this.bridge.history)
         } catch (err) {
           this.bridge.send({
             type: 'error',
@@ -327,6 +347,8 @@ export class GameServer {
           return
         }
         await this.gameLoop.processInput(msg.text)
+        // Persist history after each turn
+        await this.gameLoop.saveSessionHistory(this.bridge.history)
         break
 
       case 'save':
@@ -369,6 +391,80 @@ export class GameServer {
 
       case 'retry':
         await this.gameLoop.retry()
+        break
+
+      // Session management
+      case 'list_sessions':
+        this.bridge.sendDirect({
+          type: 'session_list',
+          sessions: this.gameLoop.listSessions().map((s) => ({
+            id: s.id,
+            label: s.label,
+            turn: s.turn,
+            location: s.location,
+            updated_at: s.updated_at,
+          })),
+        })
+        break
+
+      case 'new_session':
+        // Reset current state and start fresh
+        this.gameLoop.reset()
+        this.initialized = false
+        this.initializing = false
+        this.genesisDoc = null
+        this.bridge.clearHistory()
+        this.pendingInsistInput = null
+        this.bridge.send({ type: 'reset_complete' })
+        break
+
+      case 'switch_session': {
+        // Save current session's history before switching
+        await this.gameLoop.saveSessionHistory(this.bridge.history)
+
+        const switched = await this.gameLoop.switchSession(msg.session_id)
+        if (!switched) {
+          this.bridge.send({ type: 'error', message: '无法切换到该存档' })
+          return
+        }
+
+        // Load target session's history and replay
+        this.initialized = true
+        this.initializing = false
+        const gs = this.gameLoop.getGameState()
+        if (gs) {
+          this.genesisDoc = gs.genesisDoc
+        }
+
+        const savedHistory = await this.gameLoop.loadSessionHistory(msg.session_id)
+        if (savedHistory && savedHistory.length > 0) {
+          this.bridge.setHistory(savedHistory as ServerMessage[])
+          this.bridge.sendDirect({ type: 'history', messages: savedHistory as ServerMessage[] })
+        } else {
+          // No saved history — send minimal state so client knows the game is loaded
+          this.bridge.clearHistory()
+          if (gs) {
+            this.bridge.send({ type: 'init_complete', doc: gs.genesisDoc })
+            this.bridge.send({ type: 'status', location: gs.currentLocation, turn: gs.currentTurn })
+            this.bridge.send({ type: 'narrative', text: `已加载存档：${gs.currentLocation}，回合 ${gs.currentTurn}`, source: 'system' })
+          }
+        }
+        break
+      }
+
+      case 'delete_session':
+        this.gameLoop.deleteSession(msg.session_id)
+        // Send updated list
+        this.bridge.sendDirect({
+          type: 'session_list',
+          sessions: this.gameLoop.listSessions().map((s) => ({
+            id: s.id,
+            label: s.label,
+            turn: s.turn,
+            location: s.location,
+            updated_at: s.updated_at,
+          })),
+        })
         break
     }
   }
