@@ -38,15 +38,23 @@ export class EventContextStep implements IPipelineStep<ArbitrationResult, Arbitr
   ): Promise<StepResult<ArbitrationResult>> {
     const characterId = context.player_character_id
 
-    const [worldState, participantStates] = await Promise.all([
+    const [worldState, participantStates, subjectiveMemory] = await Promise.all([
       this.stateStore.get<string>(`world:summary:${characterId}`),
       this.stateStore.get<Array<{ npc_id: string; state_summary: string }>>(
         `participants:states:${characterId}`,
       ),
+      this.stateStore.get<{
+        recent_narrative: string[]
+        known_facts: string[]
+        known_characters: string[]
+      }>(`memory:subjective:${characterId}`),
     ])
 
     context.data.set('event_world_state', worldState ?? 'No world state available.')
     context.data.set('event_participant_states', participantStates ?? [])
+    // Pass recent narrative history so EventGenerator knows what just happened
+    context.data.set('event_recent_narrative', subjectiveMemory?.recent_narrative?.slice(-5) ?? [])
+    context.data.set('event_known_facts', subjectiveMemory?.known_facts?.slice(-10) ?? [])
 
     return { status: 'continue', data: input }
   }
@@ -161,6 +169,7 @@ export class EventGeneratorStep
       'You are the EventGenerator agent for a CRPG engine.',
       'Generate a complete event from the given action and context.',
       'IMPORTANT: The player has full freedom to roleplay ANY personality. If the action is socially reckless, rude, absurd, or provocative, DO NOT soften or redirect it — faithfully execute the action and let the WORLD react with realistic consequences (NPCs get angry, guards intervene, allies lose trust, opportunities close, etc.). The player chose this; honor their agency.',
+      'CRITICAL — NARRATIVE CONTINUITY: You MUST read the recent_narrative carefully. NPCs remember what just happened. If the player attacked or insulted an NPC in a previous turn, that NPC will NOT suddenly act friendly or ignore the conflict. NPC emotional states, injuries, hostilities, and relationship changes from recent events MUST carry forward. Breaking continuity is the worst possible error.',
       'ATTRIBUTE CHECK: If an attribute_check is provided, the narrative MUST reflect its outcome. If passed, the character succeeds at the skill-dependent part. If failed, the character fails or only partially succeeds — describe the failure naturally without breaking immersion.',
       forceInstruction,
       pacingInstruction,
@@ -173,12 +182,18 @@ export class EventGeneratorStep
     const checkDesc = context.data.get('check_description') as string | undefined
     const checkPassed = context.data.get('check_passed') as boolean | undefined
 
+    // Recent narrative history for continuity
+    const recentNarrative = context.data.get('event_recent_narrative') as string[] | undefined
+    const knownFacts = context.data.get('event_known_facts') as string[] | undefined
+
     const userMessage = JSON.stringify({
       action: input.action,
       force_flag: input.force_flag,
       force_level: input.force_level,
       world_state_summary: worldState,
       participants_state: participantStates ?? [],
+      recent_narrative: recentNarrative ?? [],
+      known_facts: knownFacts ?? [],
       attribute_check: checkDesc ? { description: checkDesc, passed: checkPassed } : null,
     })
 

@@ -82,6 +82,10 @@ export function useWebSocket() {
       const s = store.getState()
 
       switch (msg.type) {
+        case 'style_select':
+          s.setStylePresets(msg.presets)
+          break
+
         case 'insistence_prompt':
           // Voices already displayed — show insistence confirmation buttons
           s.setProcessing(false)
@@ -112,8 +116,10 @@ export function useWebSocket() {
           break
 
         case 'check': {
+          const diffLabel: Record<string, string> = { TRIVIAL: '轻松', ROUTINE: '普通', HARD: '困难', VERY_HARD: '极难', LEGENDARY: '传奇' }
           const result = msg.passed ? '成功' : '失败'
-          const line = `🎲 ${msg.attribute}检定: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs 目标${msg.target} → ${result}`
+          const diff = diffLabel[msg.difficulty] ?? msg.difficulty
+          const line = `🎲 ${msg.attribute}检定[${diff}]: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs 目标${msg.target} → ${result}`
           s.appendNarrative(line, msg.passed ? 'check-pass' : 'check-fail')
           break
         }
@@ -124,9 +130,12 @@ export function useWebSocket() {
 
         case 'error':
           s.appendNarrative(`[错误] ${msg.message}`, 'error')
+          if (msg.retryable) {
+            s.setRetryable(true)
+          }
           if (s.isProcessing) {
             s.setProcessing(false)
-            s.setInputEnabled(true)
+            s.setInputEnabled(!msg.retryable)
           }
           break
 

@@ -8,13 +8,16 @@ export type ClientMessage =
   | { type: 'reset' }
   | { type: 'insist' }
   | { type: 'abandon' }
+  | { type: 'retry' }
+  | { type: 'select_style'; preset_index: number }
+  | { type: 'select_style_custom'; tone: string; narrative_style: string; player_archetype: string }
 
 export type ServerMessage =
   | { type: 'narrative'; text: string; source: string }
   | { type: 'voices'; voices: Array<{ trait_id: string; line: string }> }
-  | { type: 'check'; attribute: string; target: number; roll: number; attribute_value: number; total: number; passed: boolean }
+  | { type: 'check'; attribute: string; difficulty: string; target: number; roll: number; attribute_value: number; total: number; passed: boolean }
   | { type: 'status'; location: string; turn: number }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; retryable?: boolean }
   | { type: 'init_progress'; step: string }
   | { type: 'init_complete'; doc: any }
   | { type: 'char_create'; attributes: Record<string, number>; attribute_meta: Array<{ id: string; display_name: string; domain: string }> }
@@ -27,3 +30,4 @@ export type ServerMessage =
   | { type: 'reset_complete' }
   | { type: 'history'; messages: ServerMessage[] }
   | { type: 'insistence_prompt' }
+  | { type: 'style_select'; presets: Array<{ label: string; description: string }> }

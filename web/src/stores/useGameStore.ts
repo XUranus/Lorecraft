@@ -52,11 +52,17 @@ interface GameState {
   inputEnabled: boolean
   initDoc: any | null
 
+  // Style selection
+  stylePresets: Array<{ label: string; description: string }> | null
+
   // Character creation
   charCreate: CharCreateState | null
 
   // Insistence prompt
   insistencePrompt: boolean
+
+  // Retryable error
+  retryable: boolean
 
   // Debug
   debugTurns: DebugTurn[]
@@ -70,8 +76,10 @@ interface GameState {
   setProcessing: (v: boolean) => void
   setInputEnabled: (v: boolean) => void
   setInitDoc: (doc: any) => void
+  setStylePresets: (presets: Array<{ label: string; description: string }> | null) => void
   setCharCreate: (state: CharCreateState | null) => void
   setInsistencePrompt: (v: boolean) => void
+  setRetryable: (v: boolean) => void
   resetGame: () => void
   debugTurnStart: (turn: number, input: string) => void
   debugStepEvent: (entry: DebugStepEntry) => void
@@ -92,9 +100,13 @@ export const useGameStore = create<GameState>((set) => ({
   inputEnabled: false,
   initDoc: null,
 
+  stylePresets: null,
+
   charCreate: null,
 
   insistencePrompt: false,
+
+  retryable: false,
 
   debugTurns: [],
 
@@ -111,8 +123,10 @@ export const useGameStore = create<GameState>((set) => ({
   setProcessing: (isProcessing) => set({ isProcessing }),
   setInputEnabled: (inputEnabled) => set({ inputEnabled }),
   setInitDoc: (initDoc) => set({ initDoc }),
+  setStylePresets: (stylePresets) => set({ stylePresets }),
   setCharCreate: (charCreate) => set({ charCreate }),
   setInsistencePrompt: (insistencePrompt) => set({ insistencePrompt }),
+  setRetryable: (retryable) => set({ retryable }),
 
   resetGame: () =>
     set({
@@ -123,8 +137,10 @@ export const useGameStore = create<GameState>((set) => ({
       isProcessing: false,
       inputEnabled: false,
       initDoc: null,
+      stylePresets: null,
       charCreate: null,
       insistencePrompt: false,
+      retryable: false,
       debugTurns: [],
     }),
 

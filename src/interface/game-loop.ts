@@ -5,17 +5,18 @@ import { InMemoryEventStore } from '../infrastructure/storage/event-store.js'
 import { InMemoryLoreStore } from '../infrastructure/storage/lore-store.js'
 import { InMemoryLongTermMemoryStore } from '../infrastructure/storage/long-term-memory-store.js'
 import { InMemorySessionStore } from '../infrastructure/storage/session-store.js'
-import { MainPipeline, createPipelineContext } from '../orchestration/pipeline/index.js'
+import { MainPipeline, PipelineExecutionError, createPipelineContext } from '../orchestration/pipeline/index.js'
 import type { NarrativeOutput } from '../orchestration/pipeline/types.js'
 import { InitializationAgent } from '../domain/services/initialization-agent.js'
 import { SaveLoadSystem } from '../domain/services/save-load-system.js'
-import { ExtensionConfigLoader, randomStylePreset } from '../domain/services/extension-config.js'
+import { ExtensionConfigLoader, STYLE_PRESETS, type StyleConfig } from '../domain/services/extension-config.js'
 import { InMemoryInjectionQueueManager } from '../domain/services/injection-queue-manager.js'
 import { SignalProcessor } from '../domain/services/signal-processor.js'
 import { LocationGraph } from '../domain/services/location-graph.js'
 import { InsistenceStateMachine } from '../domain/services/insistence-state-machine.js'
 import { EventBus, DeadLetterQueue, BroadcastRouter } from '../domain/services/event-bus.js'
 import { AgentScheduler } from '../domain/services/agent-scheduler.js'
+import { NarrativeRailAgent } from '../domain/services/narrative-rail-agent.js'
 import { NPCTierManager } from '../domain/services/npc-tier-manager.js'
 import { NPCIntentGenerator } from '../domain/services/npc-intent-generator.js'
 import {
@@ -78,7 +79,8 @@ export interface GameEventListener {
   onCheck?(check: AttributeCheckResult): void
   onInsistencePrompt?(voices: Array<{ trait_id: string; line: string }>): void
   onStatus(location: string, turn: number): void
-  onError(message: string): void
+  onError(message: string, retryable?: boolean): void
+  onStyleSelect?(presets: Array<{ label: string; description: string }>): void
   onInitProgress(step: string): void
   onInitComplete(doc: GenesisDocument): void
   onCharCreate?(attributes: PlayerAttributes, meta: Array<{ id: string; display_name: string; domain: string }>): void
@@ -106,6 +108,7 @@ export class GameLoop {
   private deadLetterQueue: DeadLetterQueue
   private broadcastRouter: BroadcastRouter
   private agentScheduler: AgentScheduler
+  private narrativeRailAgent: NarrativeRailAgent
   private configLoader: ExtensionConfigLoader
   private saveLoadSystem: SaveLoadSystem
 
@@ -114,7 +117,10 @@ export class GameLoop {
   private insistenceState: InsistenceState = 'NORMAL'
   private pendingInsistInput: string | null = null
   private pendingAttributes: PlayerAttributes | null = null
+  private lastInput: string | null = null
   private awaitingCharConfirm = false
+  private awaitingStyleSelect = false
+  private selectedStyle: StyleConfig | null = null
 
   constructor(provider: ILLMProvider, options?: { debug?: boolean | string }) {
     this.stateStore = new InMemoryStateStore()
@@ -144,6 +150,7 @@ export class GameLoop {
       injectionQueueManager: this.injectionQueueManager,
       deadLetterQueue: this.deadLetterQueue,
     })
+    this.narrativeRailAgent = new NarrativeRailAgent(this.agentRunner, this.eventStore, this.stateStore)
 
     this.saveLoadSystem = new SaveLoadSystem(
       this.stateStore,
@@ -159,12 +166,30 @@ export class GameLoop {
   }
 
   async initialize(): Promise<void> {
+    // Send style presets to client and wait for selection
+    this.awaitingStyleSelect = true
+    this.listener?.onStyleSelect?.(
+      STYLE_PRESETS.map((p) => ({ label: p.label, description: p.description })),
+    )
+  }
+
+  get isAwaitingStyleSelect(): boolean {
+    return this.awaitingStyleSelect
+  }
+
+  /** Called when the user picks a preset or provides custom style */
+  async selectStyle(style: StyleConfig): Promise<void> {
+    this.awaitingStyleSelect = false
+    this.selectedStyle = style
+    await this.generateWorld()
+  }
+
+  private async generateWorld(): Promise<void> {
+    if (!this.selectedStyle) return
     this.agentRunner.markTurn(0, '[INITIALIZATION]')
 
-    // Pick a random style for this game
-    const style = randomStylePreset()
-    this.configLoader = new ExtensionConfigLoader({ style })
-    this.listener?.onInitProgress(`正在生成游戏世界… [${style.tone.slice(0, 20)}]`)
+    this.configLoader = new ExtensionConfigLoader({ style: this.selectedStyle })
+    this.listener?.onInitProgress(`正在生成游戏世界…`)
 
     const initAgent = new InitializationAgent({
       agentRunner: this.agentRunner,
@@ -309,6 +334,7 @@ export class GameLoop {
       injectionQueueManager: this.injectionQueueManager,
       deadLetterQueue: this.deadLetterQueue,
     })
+    this.narrativeRailAgent = new NarrativeRailAgent(this.agentRunner, this.eventStore, this.stateStore)
     this.saveLoadSystem = new SaveLoadSystem(
       this.stateStore,
       this.eventStore,
@@ -322,6 +348,8 @@ export class GameLoop {
     this.pendingInsistInput = null
     this.pendingAttributes = null
     this.awaitingCharConfirm = false
+    this.awaitingStyleSelect = false
+    this.selectedStyle = null
   }
 
   async processInput(playerInput: string): Promise<void> {
@@ -352,6 +380,12 @@ export class GameLoop {
 
       // Inject persisted insistence state
       context.data.set('insistence_state', this.insistenceState)
+
+      // Inject queued reflections from narrative rail into pipeline
+      const queuedReflection = this.injectionQueueManager.dequeueReflection()
+      if (queuedReflection) {
+        context.data.set('injection_queue', [queuedReflection.content])
+      }
 
       // Inject player attributes for voices and checks
       const playerAttrs = await this.stateStore.get<PlayerAttributes>(
@@ -434,6 +468,10 @@ export class GameLoop {
       // Persist insistence state across turns
       this.insistenceState = (context.data.get('insistence_state') as InsistenceState) ?? 'NORMAL'
 
+      // Persist drift_flag for NarrativeRailAgent
+      const driftFlag = (context.data.get('drift_flag') as boolean | undefined) ?? false
+      await this.stateStore.set('pipeline:drift_flag', driftFlag)
+
       // Update game state
       this.gameState.currentTurn++
 
@@ -452,11 +490,28 @@ export class GameLoop {
 
       // End-of-turn async processing
       await this.agentScheduler.runEndOfTurn(this.gameState.currentTurn, null)
+
+      // Narrative rail: assess drift and inject corrections
+      await this.runNarrativeRailCheck()
     } catch (err) {
+      const retryable = err instanceof PipelineExecutionError &&
+        (err.code === 'PARSE_FAILED' || err.code === 'LLM_CALL_FAILED')
+      if (retryable) {
+        this.lastInput = playerInput
+      }
       this.listener?.onError(
         `处理失败: ${err instanceof Error ? err.message : String(err)}`,
+        retryable,
       )
     }
+  }
+
+  /** Retry the last failed input */
+  async retry(): Promise<void> {
+    const input = this.lastInput
+    if (!input) return
+    this.lastInput = null
+    await this.processInput(input)
   }
 
   private async collectDebugState(): Promise<Record<string, unknown>> {
@@ -496,6 +551,64 @@ export class GameLoop {
 
   getGameState(): GameState | null {
     return this.gameState
+  }
+
+  // ---- Narrative Rail Check ----
+
+  private async runNarrativeRailCheck(): Promise<void> {
+    if (!this.gameState) return
+
+    // Get current narrative phase
+    const phaseIndex = await this.stateStore.get<number>('narrative:current_phase_index') ?? 0
+    const phases = await this.stateStore.get<Array<{ phase_id: string; description: string; direction_summary: string }>>('narrative:phases')
+    if (!phases || phases.length === 0) return
+
+    const currentPhase = phases[Math.min(phaseIndex, phases.length - 1)]
+    const currentTurn = this.gameState.currentTurn
+
+    try {
+      const assessment = await this.narrativeRailAgent.assessDrift(currentPhase, currentTurn)
+
+      if (assessment.needs_intervention) {
+        const intervention = await this.narrativeRailAgent.generateIntervention(
+          assessment,
+          currentPhase,
+          currentTurn,
+          this.gameState.playerCharacterId,
+        )
+
+        if (intervention) {
+          switch (intervention.type) {
+            case 'reflection':
+              this.injectionQueueManager.enqueueReflection(intervention.injection)
+              break
+            case 'npc':
+              this.injectionQueueManager.enqueueNPC(intervention.injection)
+              break
+            case 'npc_action':
+              // Level 3: also inject as high-priority reflection so it flows
+              // through the full pipeline on the next turn (context, voices, event generation)
+              this.injectionQueueManager.enqueueReflection({
+                id: crypto.randomUUID(),
+                voice_id: 'narrator',
+                content: `[NPC主动行动] ${intervention.action_description}`,
+                priority: 'HIGH',
+                expiry_turns: 3,
+                created_at_turn: currentTurn,
+              })
+              break
+          }
+        }
+      } else {
+        // No drift — if we had previous interventions, mark them as effective
+        if (this.narrativeRailAgent.getLastInterventionLevel() > 0) {
+          this.narrativeRailAgent.recordInterventionEffect(true)
+        }
+      }
+    } catch (err) {
+      // Narrative rail failure should not block the game
+      console.error('[NarrativeRail] drift check failed:', err)
+    }
   }
 
   // ---- Rejection State Writeback ----

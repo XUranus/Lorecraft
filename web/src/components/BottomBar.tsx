@@ -9,6 +9,7 @@ export function BottomBar() {
   const inputEnabled = useGameStore((s) => s.inputEnabled)
   const isProcessing = useGameStore((s) => s.isProcessing)
   const insistencePrompt = useGameStore((s) => s.insistencePrompt)
+  const retryable = useGameStore((s) => s.retryable)
   const location = useGameStore((s) => s.location)
   const turn = useGameStore((s) => s.turn)
 
@@ -43,6 +44,17 @@ export function BottomBar() {
     send({ type: 'abandon' })
   }
 
+  function handleRetry() {
+    useGameStore.getState().setRetryable(false)
+    useGameStore.getState().setProcessing(true)
+    send({ type: 'retry' })
+  }
+
+  function handleSkipRetry() {
+    useGameStore.getState().setRetryable(false)
+    useGameStore.getState().setInputEnabled(true)
+  }
+
   return (
     <footer className="bottom-bar">
       <div className="status-bar">
@@ -50,7 +62,17 @@ export function BottomBar() {
         {turn > 0 && <span className="status-turn">回合 {turn}</span>}
         {isProcessing && <span className="status-processing">思考中…</span>}
       </div>
-      {insistencePrompt ? (
+      {retryable ? (
+        <div className="insistence-row">
+          <span className="insistence-hint">生成出错，可能是AI输出格式异常。</span>
+          <button className="insist-btn insist-confirm" onClick={handleRetry}>
+            重试
+          </button>
+          <button className="insist-btn insist-abandon" onClick={handleSkipRetry}>
+            跳过
+          </button>
+        </div>
+      ) : insistencePrompt ? (
         <div className="insistence-row">
           <span className="insistence-hint">你的内心声音强烈不建议你这么做。</span>
           <button className="insist-btn insist-confirm" onClick={handleInsist}>

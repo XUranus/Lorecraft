@@ -6,6 +6,8 @@ import type { GameEventListener } from '../interface/game-loop.js'
 import type { GenesisDocument } from '../domain/models/genesis.js'
 import type { PlayerAttributes } from '../domain/models/attributes.js'
 import type { AttributeCheckResult } from '../orchestration/steps/arbitration-steps.js'
+import { STYLE_PRESETS } from '../domain/services/extension-config.js'
+import type { StyleConfig } from '../domain/services/extension-config.js'
 import { ClientMessageSchema } from './protocol.js'
 import type { ServerMessage } from './protocol.js'
 
@@ -82,8 +84,8 @@ class WsBridge implements GameEventListener {
     this.send({ type: 'status', location, turn })
   }
 
-  onError(message: string): void {
-    this.send({ type: 'error', message })
+  onError(message: string, retryable?: boolean): void {
+    this.send({ type: 'error', message, retryable: retryable ?? false })
   }
 
   onInitProgress(step: string): void {
@@ -92,6 +94,10 @@ class WsBridge implements GameEventListener {
 
   onInitComplete(doc: GenesisDocument): void {
     this.send({ type: 'init_complete', doc })
+  }
+
+  onStyleSelect(presets: Array<{ label: string; description: string }>): void {
+    this.send({ type: 'style_select', presets })
   }
 
   onInsistencePrompt(): void {
@@ -103,6 +109,7 @@ class WsBridge implements GameEventListener {
       this.send({
         type: 'check',
         attribute: check.attribute_display_name,
+        difficulty: check.difficulty ?? 'ROUTINE',
         target: check.target!,
         roll: check.roll!,
         attribute_value: check.attribute_value!,
@@ -222,7 +229,7 @@ export class GameServer {
         break
 
       case 'initialize':
-        console.log('[GS] initialize msg — initialized:', this.initialized, 'awaitingChar:', this.gameLoop.isAwaitingCharConfirm, 'initializing:', this.initializing, 'history:', this.bridge.history.length, 'bridge connected:', this.bridge.connected)
+        console.log('[GS] initialize msg — initialized:', this.initialized, 'awaitingChar:', this.gameLoop.isAwaitingCharConfirm, 'awaitingStyle:', this.gameLoop.isAwaitingStyleSelect, 'initializing:', this.initializing, 'history:', this.bridge.history.length, 'bridge connected:', this.bridge.connected)
         if (this.initialized || this.gameLoop.isAwaitingCharConfirm) {
           // Already in progress or done — replay history instead of re-initializing
           if (this.bridge.history.length > 0) {
@@ -236,23 +243,50 @@ export class GameServer {
           }
           return
         }
+        if (this.gameLoop.isAwaitingStyleSelect) {
+          // Re-send style_select
+          this.bridge.sendDirect({ type: 'style_select', presets: STYLE_PRESETS.map(p => ({ label: p.label, description: p.description })) })
+          return
+        }
         if (this.initializing) {
-          // Initialization already in progress (e.g. client reconnected) — ignore
           this.bridge.send({ type: 'init_progress', step: '正在初始化，请稍候…' })
           return
         }
-        this.initializing = true
-        try {
-          await this.gameLoop.initialize()
-          // Don't set initialized=true yet — waiting for confirm_attributes
-        } catch (err) {
-          this.bridge.send({
-            type: 'error',
-            message: `初始化失败: ${err instanceof Error ? err.message : String(err)}`,
-          })
-        } finally {
-          this.initializing = false
+        // Start initialization — sends style_select to client
+        await this.gameLoop.initialize()
+        break
+
+      case 'select_style': {
+        if (!this.gameLoop.isAwaitingStyleSelect) {
+          this.bridge.send({ type: 'error', message: '当前不在风格选择阶段' })
+          return
         }
+        const idx = msg.preset_index
+        if (idx === -1) {
+          // Random
+          const randomIdx = Math.floor(Math.random() * STYLE_PRESETS.length)
+          const style = STYLE_PRESETS[randomIdx]
+          this.startGeneration({ tone: style.tone, complexity: style.complexity, narrative_style: style.narrative_style, player_archetype: style.player_archetype })
+        } else if (idx >= 0 && idx < STYLE_PRESETS.length) {
+          const style = STYLE_PRESETS[idx]
+          this.startGeneration({ tone: style.tone, complexity: style.complexity, narrative_style: style.narrative_style, player_archetype: style.player_archetype })
+        } else {
+          this.bridge.send({ type: 'error', message: '无效的预设索引' })
+        }
+        break
+      }
+
+      case 'select_style_custom':
+        if (!this.gameLoop.isAwaitingStyleSelect) {
+          this.bridge.send({ type: 'error', message: '当前不在风格选择阶段' })
+          return
+        }
+        this.startGeneration({
+          tone: msg.tone,
+          complexity: 'MEDIUM',
+          narrative_style: msg.narrative_style,
+          player_archetype: msg.player_archetype,
+        })
         break
 
       case 'reroll_attributes':
@@ -326,6 +360,25 @@ export class GameServer {
         this.gameLoop.abandon()
         this.bridge.send({ type: 'narrative', text: '你改变了主意。', source: 'system' })
         break
+
+      case 'retry':
+        await this.gameLoop.retry()
+        break
+    }
+  }
+
+  private async startGeneration(style: StyleConfig): Promise<void> {
+    this.initializing = true
+    try {
+      await this.gameLoop.selectStyle(style)
+      // Don't set initialized=true yet — waiting for confirm_attributes
+    } catch (err) {
+      this.bridge.send({
+        type: 'error',
+        message: `初始化失败: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    } finally {
+      this.initializing = false
     }
   }
 

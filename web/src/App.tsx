@@ -3,6 +3,7 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { TitleBar } from './components/TitleBar'
 import { TabBar } from './components/TabBar'
 import { BottomBar } from './components/BottomBar'
+import { StyleSelectOverlay } from './components/StyleSelectOverlay'
 import { CharCreateOverlay } from './components/CharCreateOverlay'
 import { tabs } from './tabs/registry'
 
@@ -25,6 +26,7 @@ export function App() {
         {ActiveComponent && <ActiveComponent />}
       </main>
       <BottomBar />
+      <StyleSelectOverlay />
       <CharCreateOverlay />
     </div>
   )

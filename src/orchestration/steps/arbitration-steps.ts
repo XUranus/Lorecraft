@@ -74,12 +74,12 @@ export class FeasibilityCheckStep implements IPipelineStep<AtomicAction, AtomicA
       '',
       'Assess these dimensions:',
       '',
-      '1. **Information completeness**: Does the character subjectively possess the information needed to perform this action? (The player knowing something does NOT mean the character knows it.)',
+      '1. **Information completeness**: Does the character subjectively possess the information needed to perform this action? (The player knowing something does NOT mean the character knows it.) CRITICAL EXCEPTION: Bluffing, lying, making false accusations, guessing, and fabricating information are ALWAYS feasible — the character is deliberately making things up, which does NOT require actually possessing the information. Only reject if the action genuinely requires factual knowledge the character does not have AND the action is NOT a deliberate deception or provocation.',
       '2. **Physical/spatial feasibility**: Is the action physically possible given the character\'s current body, location, and equipment? IMPORTANT: Items or objects not explicitly mentioned in the scene should be considered present if they are reasonable for the current environment (e.g. a tavern has tables, cups, a door; a forest has trees, rocks, bushes). Only reject if the object is clearly impossible in context.',
-      '3. **Logical consistency**: Would the action create a factual contradiction with established world state? (e.g. talking to a character who is dead, using an item already consumed.)',
+      '3. **Logical consistency**: Would the action create a factual contradiction with established world state? (e.g. talking to a character who is dead, using an item already consumed.) Note: saying something false or unverified is NOT a logical contradiction — the character is speaking, not rewriting reality.',
       '4. **Narrative drift**: Would this action cause the story to significantly derail from the main narrative arc? (This dimension NEVER causes rejection — it only flags drift.)',
       '',
-      'ONLY reject (passed=false) if dimension 1, 2, or 3 fails. Socially awkward, rude, absurd, or "unwise" actions MUST pass — the world will react accordingly.',
+      'ONLY reject (passed=false) if dimension 1, 2, or 3 fails. Socially awkward, rude, absurd, deceptive, or "unwise" actions MUST pass — the world will react accordingly. Bluffs and lies should PASS feasibility and let the world simulation handle NPC reactions (belief, anger, confusion, etc.).',
       '',
       'If any of dimensions 1-3 fails, generate a short, in-character rejection narrative that feels natural within the game world — never expose system language to the player.',
       'If all dimensions 1-3 pass, the overall result is passed. rejection_narrative should be null.',
@@ -156,6 +156,7 @@ export interface AttributeCheckResult {
   needed: boolean
   attribute_id?: string
   attribute_display_name?: string
+  difficulty?: string
   target?: number
   roll?: number
   attribute_value?: number
@@ -163,10 +164,27 @@ export interface AttributeCheckResult {
   passed?: boolean
 }
 
+const DIFFICULTY_RANGES: Record<string, [number, number]> = {
+  TRIVIAL:    [40, 60],
+  ROUTINE:    [70, 90],
+  HARD:       [100, 120],
+  VERY_HARD:  [130, 150],
+  LEGENDARY:  [160, 180],
+}
+
+const DIFFICULTY_IDS = Object.keys(DIFFICULTY_RANGES) as Array<keyof typeof DIFFICULTY_RANGES>
+
+function rollTarget(difficulty: string): number {
+  const range = DIFFICULTY_RANGES[difficulty]
+  if (!range) return 80 // fallback to ROUTINE midpoint
+  const [min, max] = range
+  return min + Math.floor(Math.random() * (max - min + 1))
+}
+
 const CheckDecisionSchema = z.object({
   needs_check: z.boolean(),
   attribute: z.string().nullable(),
-  target: z.number().int().min(1).max(200).nullable(),
+  difficulty: z.string().nullable(),
   reason: z.string().nullable(),
 })
 
@@ -207,17 +225,18 @@ export class AttributeCheckStep implements IPipelineStep<AtomicAction, AtomicAct
       '- Pure narrative/roleplaying choices with no skill dependency',
       '- Actions already blocked by feasibility (physically impossible)',
       '',
-      'TARGET VALUE GUIDELINES (d100 + attribute >= target to pass):',
-      '- 30-50: Easy — most characters can do this',
-      '- 51-80: Moderate — needs decent ability',
-      '- 81-110: Hard — needs high ability or luck',
-      '- 111-140: Very Hard — needs exceptional ability',
-      '- 141+: Near Impossible — only the most gifted can attempt',
+      'DIFFICULTY LEVELS (choose ONE):',
+      '- TRIVIAL: Almost anyone can do this, only the weakest might fail (e.g. pushing open an unlocked door, basic small talk)',
+      '- ROUTINE: Needs some ability, average person succeeds more often than not (e.g. climbing a low fence, persuading a friendly NPC, spotting something partially hidden)',
+      '- HARD: Genuine challenge requiring strong ability in this area (e.g. picking a good lock, deceiving a suspicious guard, hitting a moving target)',
+      '- VERY_HARD: Even experts need luck (e.g. disarming a master trap, intimidating a fearless veteran, sprinting across a collapsing bridge)',
+      '- LEGENDARY: Near impossible, only the absolute best have a slim chance (e.g. outrunning a horse, persuading a sworn enemy to surrender, catching an arrow mid-flight)',
       '',
       `Player attributes:\n${attrList}`,
       '',
       'Choose the MOST relevant single attribute for the check.',
-      'Respond with ONLY valid JSON: { "needs_check": boolean, "attribute": "attribute_id"|null, "target": number|null, "reason": string|null }',
+      'IMPORTANT: Do NOT look at the player\'s attribute values when deciding difficulty. Difficulty is determined by the action and situation, not by how good the player is at it.',
+      'Respond with ONLY valid JSON: { "needs_check": boolean, "attribute": "attribute_id"|null, "difficulty": "TRIVIAL"|"ROUTINE"|"HARD"|"VERY_HARD"|"LEGENDARY"|null, "reason": string|null }',
     ].join('\n')
 
     const userMessage = JSON.stringify({
@@ -237,13 +256,14 @@ export class AttributeCheckStep implements IPipelineStep<AtomicAction, AtomicAct
 
       const result = this.parser.parse(response.content)
 
-      if (!result.success || !result.data.needs_check || !result.data.attribute || !result.data.target) {
+      if (!result.success || !result.data.needs_check || !result.data.attribute || !result.data.difficulty) {
         context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
         return { status: 'continue', data: input }
       }
 
       const decision = result.data
-      const target = decision.target!
+      const difficulty = DIFFICULTY_IDS.includes(decision.difficulty as any) ? decision.difficulty! : 'ROUTINE'
+      const target = rollTarget(difficulty)
       const attrId = decision.attribute as keyof PlayerAttributes
       const meta = ATTRIBUTE_META[attrId as typeof ATTRIBUTE_IDS[number]]
       if (!meta) {
@@ -261,6 +281,7 @@ export class AttributeCheckStep implements IPipelineStep<AtomicAction, AtomicAct
         needed: true,
         attribute_id: attrId,
         attribute_display_name: meta.display_name,
+        difficulty,
         target,
         roll,
         attribute_value: attrValue,
@@ -271,7 +292,7 @@ export class AttributeCheckStep implements IPipelineStep<AtomicAction, AtomicAct
       context.data.set('attribute_check', checkResult)
       // Store pass/fail for EventGenerator to use
       context.data.set('check_passed', passed)
-      context.data.set('check_description', `${meta.display_name}检定: d100(${roll}) + ${meta.display_name}(${attrValue}) = ${total} vs 目标${decision.target} → ${passed ? '成功' : '失败'}`)
+      context.data.set('check_description', `${meta.display_name}检定[${difficulty}]: d100(${roll}) + ${meta.display_name}(${attrValue}) = ${total} vs 目标${target} → ${passed ? '成功' : '失败'}`)
 
       return { status: 'continue', data: input }
     } catch (err) {
