@@ -10,6 +10,7 @@ import type { Event } from '../../domain/models/event.js'
 import type { SignalProcessor } from '../../domain/services/signal-processor.js'
 import { EventGeneratorOutputSchema, SignalBOutputSchema, PacingCheckOutputSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
+import { z } from 'zod/v4'
 
 // ============================================================
 // Intermediate type for event data flowing through the pipeline
@@ -19,6 +20,12 @@ export interface EventPipelineData {
   event_id: string
   generator_output: EventGeneratorOutput
   arbitration: ArbitrationResult
+}
+
+export interface BeatPlan {
+  beats: Array<{ description: string; purpose: string }>
+  current_beat_index: number
+  created_at_turn: number
 }
 
 // ============================================================
@@ -41,7 +48,7 @@ export class EventContextStep implements IPipelineStep<ArbitrationResult, Arbitr
   ): Promise<StepResult<ArbitrationResult>> {
     const characterId = context.player_character_id
 
-    const [worldState, participantStates, subjectiveMemory, worldTone] = await Promise.all([
+    const [worldState, participantStates, subjectiveMemory, worldTone, phaseIndex, phases, beatPlan] = await Promise.all([
       this.stateStore.get<string>(`world:summary:${characterId}`),
       this.stateStore.get<Array<{ npc_id: string; state_summary: string }>>(
         `participants:states:${characterId}`,
@@ -52,14 +59,29 @@ export class EventContextStep implements IPipelineStep<ArbitrationResult, Arbitr
         known_characters: string[]
       }>(`memory:subjective:${characterId}`),
       this.stateStore.get<string>('world:tone'),
+      this.stateStore.get<number>('narrative:current_phase_index'),
+      this.stateStore.get<Array<{ phase_id: string; description: string; direction_summary: string }>>('narrative:phases'),
+      this.stateStore.get<BeatPlan>('narrative:beat_plan'),
     ])
 
     context.data.set('event_world_state', worldState ?? 'No world state available.')
     context.data.set('event_participant_states', participantStates ?? [])
-    // Pass recent narrative history so EventGenerator knows what just happened
     context.data.set('event_recent_narrative', subjectiveMemory?.recent_narrative?.slice(-5) ?? [])
     context.data.set('event_known_facts', subjectiveMemory?.known_facts?.slice(-10) ?? [])
     context.data.set('world_tone', worldTone ?? '')
+
+    // Narrative phase direction
+    if (phases && phases.length > 0) {
+      const idx = Math.min(phaseIndex ?? 0, phases.length - 1)
+      context.data.set('narrative_phase', phases[idx])
+      context.data.set('narrative_phase_index', idx)
+      context.data.set('narrative_phase_total', phases.length)
+    }
+
+    // Beat plan (short-term scene guidance)
+    if (beatPlan) {
+      context.data.set('beat_plan', beatPlan)
+    }
 
     // Recent event weights for pacing awareness
     const allEvents = await this.eventStore.getAllTier1()
@@ -193,11 +215,30 @@ export class EventGeneratorStep
       }
     }
 
+    // Narrative direction from current phase + beat plan
+    const narrativePhase = context.data.get('narrative_phase') as { phase_id: string; description: string; direction_summary: string } | undefined
+    const phaseIndex = context.data.get('narrative_phase_index') as number | undefined
+    const phaseTotal = context.data.get('narrative_phase_total') as number | undefined
+    const beatPlan = context.data.get('beat_plan') as BeatPlan | undefined
+
+    let narrativeDirectionInstruction = ''
+    if (narrativePhase) {
+      narrativeDirectionInstruction = `NARRATIVE DIRECTION (IMPORTANT): The story is currently in phase ${(phaseIndex ?? 0) + 1}/${phaseTotal ?? '?'}: "${narrativePhase.description}". The intended direction is: "${narrativePhase.direction_summary}". While respecting player agency, gently weave narrative elements that align with this direction. Introduce relevant characters, clues, or situations that make the player WANT to engage with the main story. Do NOT force it — but do NOT let the story stagnate in aimless scenes either. If the player's action naturally connects to the narrative direction, amplify that connection.`
+    }
+
+    let beatInstruction = ''
+    if (beatPlan && beatPlan.current_beat_index < beatPlan.beats.length) {
+      const currentBeat = beatPlan.beats[beatPlan.current_beat_index]
+      beatInstruction = `CURRENT SCENE BEAT: "${currentBeat.description}" (purpose: ${currentBeat.purpose}). Try to incorporate this beat naturally into the scene. If the player's action makes this beat impossible, adapt — but still aim to advance the story rather than spinning in place.`
+    }
+
     const systemPrompt = [
       'You are the EventGenerator agent for a CRPG engine.',
       'Generate a complete event from the given action and context.',
       toneInstruction,
       tensionInstruction,
+      narrativeDirectionInstruction,
+      beatInstruction,
       'IMPORTANT: The player has full freedom to roleplay ANY personality. If the action is socially reckless, rude, absurd, or provocative, DO NOT soften or redirect it — faithfully execute the action and let the WORLD react with realistic consequences (NPCs get angry, guard intervene, allies lose trust, opportunities close, etc.). The player chose this; honor their agency.',
       'CRITICAL — NARRATIVE CONTINUITY: You MUST read the recent_narrative carefully. NPCs remember what just happened. If the player attacked or insulted an NPC in a previous turn, that NPC will NOT suddenly act friendly or ignore the conflict. NPC emotional states, injuries, hostilities, and relationship changes from recent events MUST carry forward. Breaking continuity is the worst possible error.',
       'ATTRIBUTE CHECK: If an attribute_check is provided, the narrative MUST reflect its outcome. If passed, the character succeeds at the skill-dependent part. If failed, the character fails or only partially succeeds — describe the failure naturally without breaking immersion.',
@@ -241,6 +282,13 @@ export class EventGeneratorStep
       known_facts: knownFacts ?? [],
       attribute_check: checkDesc ? { description: checkDesc, passed: checkPassed } : null,
       player_wish: playerWish ?? null,
+      narrative_direction: narrativePhase ? {
+        phase: narrativePhase.description,
+        direction: narrativePhase.direction_summary,
+        current_beat: beatPlan && beatPlan.current_beat_index < beatPlan.beats.length
+          ? beatPlan.beats[beatPlan.current_beat_index].description
+          : null,
+      } : null,
     })
 
     try {
@@ -664,6 +712,115 @@ export class SignalBStep implements IPipelineStep<EventPipelineData, EventPipeli
       }
     } catch {
       // Signal B tagging is non-critical; continue on failure
+    }
+
+    return { status: 'continue', data: input }
+  }
+}
+
+// ============================================================
+// Step 6b: NarrativeProgressStep — advance phase & beat plan
+// ============================================================
+
+const NarrativeProgressSchema = z.object({
+  phase_complete: z.boolean(),
+  phase_complete_reasoning: z.string(),
+  next_beats: z.array(z.object({
+    description: z.string(),
+    purpose: z.string(),
+  })).optional(),
+})
+
+export class NarrativeProgressStep implements IPipelineStep<EventPipelineData, EventPipelineData> {
+  readonly name = 'NarrativeProgressStep'
+  private readonly agentRunner: AgentRunner
+  private readonly stateStore: IStateStore
+  private readonly parser = new ResponseParser(NarrativeProgressSchema)
+
+  constructor(agentRunner: AgentRunner, stateStore: IStateStore) {
+    this.agentRunner = agentRunner
+    this.stateStore = stateStore
+  }
+
+  async execute(
+    input: EventPipelineData,
+    context: PipelineContext,
+  ): Promise<StepResult<EventPipelineData>> {
+    const phases = await this.stateStore.get<Array<{ phase_id: string; description: string; direction_summary: string }>>('narrative:phases')
+    if (!phases || phases.length === 0) {
+      return { status: 'continue', data: input }
+    }
+
+    const phaseIndex = (await this.stateStore.get<number>('narrative:current_phase_index')) ?? 0
+    const currentPhase = phases[Math.min(phaseIndex, phases.length - 1)]
+    const beatPlan = await this.stateStore.get<BeatPlan>('narrative:beat_plan')
+
+    // Advance beat index each turn
+    if (beatPlan && beatPlan.current_beat_index < beatPlan.beats.length) {
+      beatPlan.current_beat_index++
+      await this.stateStore.set('narrative:beat_plan', beatPlan)
+    }
+
+    // Check if we need a new beat plan (exhausted or doesn't exist)
+    const needsNewBeatPlan = !beatPlan
+      || beatPlan.current_beat_index >= beatPlan.beats.length
+      || (context.turn_number - beatPlan.created_at_turn >= 5)
+
+    // Ask LLM: is the current phase complete? Generate new beats if needed.
+    const gen = input.generator_output
+
+    const systemPrompt = [
+      'You are a narrative progress assessor for a CRPG engine.',
+      'Given the current narrative phase and the latest event, determine:',
+      '1. Whether the current phase\'s goals have been met (phase_complete: true/false)',
+      '2. If a new beat plan is needed, generate 3-5 short-term scene beats that guide the next few turns toward the phase goal.',
+      '',
+      'A phase is complete when its key dramatic goals have been achieved — NOT just because time has passed.',
+      'Beats are short-term: each describes one scene moment or interaction that moves the story forward.',
+      '',
+      'Respond with ONLY valid JSON:',
+      '{ "phase_complete": boolean, "phase_complete_reasoning": string, "next_beats": [{ "description": string, "purpose": string }] | null }',
+      'Include next_beats only when a new beat plan is needed (current plan exhausted or phase just advanced).',
+    ].join('\n')
+
+    const userMessage = JSON.stringify({
+      current_phase: currentPhase,
+      phase_index: phaseIndex,
+      total_phases: phases.length,
+      latest_event: { title: gen.title, summary: gen.summary, tags: gen.tags, weight: gen.weight },
+      current_beat_plan: beatPlan,
+      needs_new_beat_plan: needsNewBeatPlan,
+      turn: context.turn_number,
+    })
+
+    try {
+      const response = await this.agentRunner.run(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        { agent_type: 'NarrativeProgressAssessor' },
+      )
+
+      const result = this.parser.parse(response.content)
+      if (result.success) {
+        // Advance phase if complete and not at the last phase
+        if (result.data.phase_complete && phaseIndex < phases.length - 1) {
+          await this.stateStore.set('narrative:current_phase_index', phaseIndex + 1)
+        }
+
+        // Update beat plan if new beats were generated
+        if (result.data.next_beats && result.data.next_beats.length > 0) {
+          const newPlan: BeatPlan = {
+            beats: result.data.next_beats,
+            current_beat_index: 0,
+            created_at_turn: context.turn_number,
+          }
+          await this.stateStore.set('narrative:beat_plan', newPlan)
+        }
+      }
+    } catch {
+      // Non-critical — narrative progresses regardless
     }
 
     return { status: 'continue', data: input }

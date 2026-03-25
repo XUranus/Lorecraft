@@ -48,6 +48,7 @@ import {
   EventIdStep,
   EventWriteStep,
   StateWritebackStep,
+  NarrativeProgressStep,
   EventBroadcastStep,
 } from '../orchestration/steps/event-steps.js'
 import type { ParsedIntent, InsistenceState } from '../domain/models/pipeline-io.js'
@@ -770,6 +771,7 @@ export class GameLoop {
     pipeline.addStep(new EventIdStep())
     pipeline.addStep(new EventWriteStep(this.eventStore))
     pipeline.addStep(new StateWritebackStep(this.stateStore, this.eventStore))
+    pipeline.addStep(new NarrativeProgressStep(this.agentRunner, this.stateStore))
     pipeline.addStep(new EventBroadcastStep())
 
     return pipeline
