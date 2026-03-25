@@ -121,6 +121,14 @@ export const StateChangeSchema = z.object({
 
 export type StateChange = z.infer<typeof StateChangeSchema>
 
+export const CharacterObservationSchema = z.object({
+  npc_name: z.string(),
+  observation: z.string(),
+  relationship_hint: z.string().optional(),
+})
+
+export type CharacterObservation = z.infer<typeof CharacterObservationSchema>
+
 export const EventGeneratorOutputSchema = z.object({
   title: z.string(),
   tags: z.array(z.string()),
@@ -129,6 +137,7 @@ export const EventGeneratorOutputSchema = z.object({
   context: z.string(),
   narrative_text: z.string(),
   state_changes: z.array(StateChangeSchema),
+  character_observations: z.array(CharacterObservationSchema).default([]),
 })
 
 export type EventGeneratorOutput = z.infer<typeof EventGeneratorOutputSchema>

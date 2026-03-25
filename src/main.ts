@@ -9,6 +9,7 @@ import type { ILLMProvider } from './ai/runner/llm-provider.js'
 import { AnthropicProvider } from './ai/runner/anthropic-provider.js'
 import { GeminiProvider } from './ai/runner/gemini-provider.js'
 import { OpenAIProvider } from './ai/runner/openai-provider.js'
+import { loadLLMConfig, createProviderFromConfig } from './server/llm-config.js'
 
 // ============================================================
 // Config Loading: ~/.config/lorecraft/.env → project .env → env vars
@@ -54,6 +55,18 @@ setupProxy()
 // ============================================================
 
 function createProvider(): ILLMProvider {
+  // Priority 0: Saved UI config (from settings page)
+  const savedConfig = loadLLMConfig()
+  if (savedConfig && savedConfig.api_key) {
+    try {
+      const provider = createProviderFromConfig(savedConfig)
+      console.log(`[LLM] Using saved config: ${savedConfig.provider} / ${savedConfig.model || 'default'}`)
+      return provider
+    } catch {
+      console.warn('[LLM] Saved config invalid, falling back to env vars')
+    }
+  }
+
   const providerName = process.env.LLM_PROVIDER?.toLowerCase() ?? 'auto'
 
   if (providerName === 'gemini' || providerName === 'google') {

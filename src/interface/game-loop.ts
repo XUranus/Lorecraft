@@ -167,6 +167,11 @@ export class GameLoop {
     this.listener = listener
   }
 
+  /** Hot-swap the LLM provider at runtime */
+  setProvider(provider: ILLMProvider): void {
+    this.agentRunner.setProvider(provider)
+  }
+
   async initialize(): Promise<void> {
     // Send style presets to client and wait for selection
     this.awaitingStyleSelect = true
@@ -201,6 +206,7 @@ export class GameLoop {
       loreStore: this.loreStore,
       eventBus: this.eventBus,
       configLoader: this.configLoader,
+      onProgress: (msg) => this.listener?.onInitProgress(msg),
     })
 
     try {
@@ -603,6 +609,46 @@ export class GameLoop {
     return this.gameState
   }
 
+  /** Gather all character info the player currently knows about */
+  async getCharacterInfo(): Promise<{ player: any; npcs: any[] } | null> {
+    if (!this.gameState) return null
+    const doc = this.gameState.genesisDoc
+    const playerId = this.gameState.playerCharacterId
+    const pc = doc.characters.player_character
+
+    // Player info
+    const playerAttrs = await this.stateStore.get<Record<string, number>>(
+      `player:attributes:${playerId}`,
+    )
+    const playerInfo = {
+      id: pc.id,
+      name: pc.name,
+      background: pc.background,
+      attributes: playerAttrs,
+    }
+
+    // NPC info: only what the player has encountered (player:knowledge:*)
+    const knowledgeKeys = await this.stateStore.listByPrefix('player:knowledge:')
+    const npcs: any[] = []
+    for (const key of knowledgeKeys) {
+      const k = await this.stateStore.get<import('../domain/models/character.js').CharacterKnowledge>(key)
+      if (k) {
+        npcs.push({
+          id: k.npc_id,
+          name: k.name,
+          first_impression: k.first_impression,
+          known_facts: k.known_facts,
+          relationship_to_player: k.relationship_to_player,
+          last_seen_location: k.last_seen_location,
+          last_seen_emotion: k.last_seen_emotion,
+          last_interaction_turn: k.last_interaction_turn,
+        })
+      }
+    }
+
+    return { player: playerInfo, npcs }
+  }
+
   // ---- Narrative Rail Check ----
 
   private async runNarrativeRailCheck(): Promise<void> {
@@ -717,7 +763,7 @@ export class GameLoop {
     pipeline.addStep(new ArbitrationResultStep())
 
     // Event stage
-    pipeline.addStep(new EventContextStep(this.stateStore))
+    pipeline.addStep(new EventContextStep(this.stateStore, this.eventStore))
     pipeline.addStep(new PacingCheckStep(this.agentRunner))
     pipeline.addStep(new EventGeneratorStep(this.agentRunner))
     pipeline.addStep(new EventSchemaValidationStep())

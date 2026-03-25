@@ -6,10 +6,12 @@ import { BottomBar } from './components/BottomBar'
 import { StyleSelectOverlay } from './components/StyleSelectOverlay'
 import { CharCreateOverlay } from './components/CharCreateOverlay'
 import { SessionOverlay } from './components/SessionOverlay'
+import { SettingsOverlay } from './components/SettingsOverlay'
 import { tabs } from './tabs/registry'
 
 // Import tabs so they self-register
 import './tabs/NarrativeTab'
+import './tabs/CharactersTab'
 import './tabs/DebugTab'
 
 export function App() {
@@ -29,6 +31,7 @@ export function App() {
       <StyleSelectOverlay />
       <CharCreateOverlay />
       <SessionOverlay />
+      <SettingsOverlay />
     </div>
   )
 }

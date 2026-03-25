@@ -175,6 +175,7 @@ export function useWebSocket() {
 
         case 'init_progress':
           s.appendNarrative(msg.step, 'system')
+          s.appendInitLog(msg.step)
           break
 
         case 'init_complete': {
@@ -257,8 +258,28 @@ export function useWebSocket() {
           break
         }
 
+        case 'characters':
+          s.setCharacters(msg.player, msg.npcs)
+          break
+
         case 'session_list':
           s.setSessionList(msg.sessions)
+          break
+
+        case 'llm_config':
+          s.setLLMConfig(msg.config)
+          break
+
+        case 'llm_config_saved':
+          s.appendNarrative('[系统] 大模型配置已保存', 'system')
+          break
+
+        case 'llm_test_result':
+          s.setLLMTestResult({ success: msg.success, message: msg.message })
+          break
+
+        case 'model_list':
+          s.setLLMModels(msg.models)
           break
 
         case 'reset_complete':

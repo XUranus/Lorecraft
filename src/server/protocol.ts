@@ -23,11 +23,35 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     narrative_style: z.string().min(1),
     player_archetype: z.string().min(1),
   }),
+  // Character info
+  z.object({ type: z.literal('get_characters') }),
   // Session management
   z.object({ type: z.literal('list_sessions') }),
   z.object({ type: z.literal('new_session') }),
   z.object({ type: z.literal('switch_session'), session_id: z.string() }),
   z.object({ type: z.literal('delete_session'), session_id: z.string() }),
+  // LLM config
+  z.object({ type: z.literal('get_llm_config') }),
+  z.object({
+    type: z.literal('set_llm_config'),
+    provider: z.enum(['openai_compatible', 'gemini', 'openai', 'anthropic']),
+    api_key: z.string().min(1),
+    model: z.string(),
+    base_url: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('test_llm_config'),
+    provider: z.enum(['openai_compatible', 'gemini', 'openai', 'anthropic']),
+    api_key: z.string().min(1),
+    model: z.string(),
+    base_url: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('list_models'),
+    provider: z.enum(['openai_compatible', 'gemini', 'openai', 'anthropic']),
+    api_key: z.string().min(1),
+    base_url: z.string().optional(),
+  }),
 ])
 
 export type ClientMessage = z.infer<typeof ClientMessageSchema>
@@ -56,3 +80,22 @@ export type ServerMessage =
   | { type: 'insistence_prompt' }
   | { type: 'style_select'; presets: Array<{ label: string; description: string }> }
   | { type: 'session_list'; sessions: Array<{ id: string; label: string; turn: number; location: string; updated_at: number }> }
+  | { type: 'characters'; player: CharacterInfo; npcs: CharacterInfo[] }
+  | { type: 'llm_config'; config: { provider: string; api_key: string; model: string; base_url?: string } }
+  | { type: 'llm_config_saved' }
+  | { type: 'llm_test_result'; success: boolean; message: string }
+  | { type: 'model_list'; models: string[] }
+
+export interface CharacterInfo {
+  id: string
+  name: string
+  background?: string
+  attributes?: Record<string, number>
+  // NPC knowledge fields
+  first_impression?: string
+  known_facts?: string[]
+  relationship_to_player?: string
+  last_seen_location?: string
+  last_seen_emotion?: string
+  last_interaction_turn?: number
+}

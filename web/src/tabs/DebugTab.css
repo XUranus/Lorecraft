@@ -64,6 +64,34 @@
   padding: 4px 0;
 }
 
+/* Init log entries */
+.debug-init-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 10px 3px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.debug-init-entry:last-child {
+  border-bottom: none;
+}
+
+.debug-init-time {
+  color: var(--status);
+  font-size: 11px;
+  font-family: monospace;
+  min-width: 48px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.debug-init-msg {
+  color: var(--fg);
+  font-size: 12px;
+  word-break: break-all;
+}
+
 /* Step node */
 .debug-step {
   border-bottom: 1px solid var(--border);

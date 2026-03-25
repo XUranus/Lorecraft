@@ -46,6 +46,10 @@ export class AgentRunner {
   private turnCounter = 0
   private _pendingUsage: TokenUsage[] = []
 
+  setProvider(provider: ILLMProvider): void {
+    this.provider = provider
+  }
+
   constructor(provider: ILLMProvider, options?: AgentRunnerOptions) {
     this.provider = provider
     this.timeout = options?.timeout_ms ?? 30_000

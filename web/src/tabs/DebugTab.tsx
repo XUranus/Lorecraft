@@ -5,20 +5,58 @@ import { registerTab } from './registry'
 import './DebugTab.css'
 
 function DebugTab() {
+  const initLog = useGameStore((s) => s.debugInitLog)
   const debugTurns = useGameStore((s) => s.debugTurns)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const el = containerRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [debugTurns])
+  }, [debugTurns, initLog])
+
+  const empty = initLog.length === 0 && debugTurns.length === 0
 
   return (
     <div className="debug-tab" ref={containerRef}>
-      {debugTurns.length === 0 ? (
-        <div className="debug-empty">等待输入以查看 Pipeline 调试信息…</div>
+      {empty ? (
+        <div className="debug-empty">等待游戏开始以查看调试信息…</div>
       ) : (
-        debugTurns.map((turn, i) => <TurnBlock key={i} turn={turn} isLast={i === debugTurns.length - 1} />)
+        <>
+          {initLog.length > 0 && <InitBlock log={initLog} />}
+          {debugTurns.map((turn, i) => <TurnBlock key={i} turn={turn} isLast={i === debugTurns.length - 1} />)}
+        </>
+      )}
+    </div>
+  )
+}
+
+function InitBlock({ log }: { log: Array<{ message: string; timestamp: number }> }) {
+  const [expanded, setExpanded] = useState(true)
+  const t0 = log[0]?.timestamp ?? 0
+  const tEnd = log[log.length - 1]?.timestamp ?? 0
+  const totalMs = tEnd - t0
+
+  return (
+    <div className="debug-turn">
+      <div className="debug-turn-header" onClick={() => setExpanded(!expanded)}>
+        <span className="debug-chevron">{expanded ? '▼' : '▶'}</span>
+        <span className="debug-turn-label">世界生成</span>
+        <span className="debug-turn-input">初始化</span>
+        {totalMs > 0 && <span className="debug-turn-tokens">{(totalMs / 1000).toFixed(1)}s</span>}
+        <span className="debug-turn-count">{log.length} 步</span>
+      </div>
+      {expanded && (
+        <div className="debug-turn-body">
+          {log.map((entry, i) => {
+            const delta = i > 0 ? entry.timestamp - log[i - 1].timestamp : 0
+            return (
+              <div key={i} className="debug-init-entry">
+                <span className="debug-init-time">+{(delta / 1000).toFixed(1)}s</span>
+                <span className="debug-init-msg">{entry.message}</span>
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )

@@ -42,6 +42,12 @@ export function TitleBar() {
     setMenuOpen(false)
   }
 
+  function handleSettings() {
+    send({ type: 'get_llm_config' })
+    useGameStore.getState().setSettingsOpen(true)
+    setMenuOpen(false)
+  }
+
   return (
     <header className="title-bar">
       <span className="title-logo">&#9876; LORECRAFT</span>
@@ -61,6 +67,9 @@ export function TitleBar() {
               </button>
               <button className="menu-item" onClick={handleSessions}>
                 存档管理
+              </button>
+              <button className="menu-item" onClick={handleSettings}>
+                设置
               </button>
               <button className="menu-item danger" onClick={handleReset}>
                 {confirmReset ? '确认重置？' : '重置游戏'}

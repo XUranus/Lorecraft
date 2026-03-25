@@ -296,7 +296,7 @@ function buildPipeline(deps: {
   pipeline.addStep(new ArbitrationResultStep())
 
   // ── Event Pipeline ──
-  pipeline.addStep(new EventContextStep(stateStore))
+  pipeline.addStep(new EventContextStep(stateStore, eventStore))
   pipeline.addStep(new PacingCheckStep(agentRunner))
   pipeline.addStep(new EventGeneratorStep(agentRunner))
   pipeline.addStep(new EventSchemaValidationStep())

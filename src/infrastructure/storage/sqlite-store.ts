@@ -576,8 +576,8 @@ export class SQLiteStore {
       this.db.exec('DELETE FROM lore')
       this.db.exec('DELETE FROM injections')
       this.db.exec('DELETE FROM kv_store')
-      this.db.exec('DELETE FROM genesis')
       this.db.exec('DELETE FROM sessions')
+      this.db.exec('DELETE FROM genesis')
     })()
   }
 

@@ -11,7 +11,7 @@ import type { GenesisDocument } from '../models/genesis.js'
 import type { Event } from '../models/event.js'
 import type { LocationState } from '../models/world.js'
 import type { FactionState, FactionRelationship } from '../models/world.js'
-import type { CharacterDynamicState, MemoryBuffer } from '../models/character.js'
+import type { CharacterDynamicState, MemoryBuffer, CharacterKnowledge } from '../models/character.js'
 import type { LoreEntry } from '../models/lore.js'
 import type { NPCProfile } from '../models/lore.js'
 import type { EventBus } from './event-bus.js'
@@ -30,6 +30,7 @@ export class InitializationAgent {
   private readonly eventBus: EventBus | null
   private readonly configLoader: ExtensionConfigLoader
   private readonly genesisParser = new ResponseParser(GenesisDocumentSchema)
+  private readonly onProgress: (msg: string) => void
 
   constructor(deps: {
     agentRunner: AgentRunner
@@ -39,6 +40,7 @@ export class InitializationAgent {
     loreStore: ILoreStore
     eventBus?: EventBus
     configLoader: ExtensionConfigLoader
+    onProgress?: (msg: string) => void
   }) {
     this.agentRunner = deps.agentRunner
     this.stateStore = deps.stateStore
@@ -47,6 +49,7 @@ export class InitializationAgent {
     this.loreStore = deps.loreStore
     this.eventBus = deps.eventBus ?? null
     this.configLoader = deps.configLoader
+    this.onProgress = deps.onProgress ?? (() => {})
   }
 
   /**
@@ -54,23 +57,32 @@ export class InitializationAgent {
    * Returns the generated GenesisDocument.
    */
   async initialize(): Promise<GenesisDocument> {
+    const t0 = Date.now()
+
     // Step 1: Load style config
+    this.onProgress('正在加载风格配置…')
     const styleConfig = this.configLoader.getStyleConfig()
 
     // Step 2: Generate GenesisDocument via LLM
+    this.onProgress('正在调用大模型生成世界…')
     const genesisDoc = await this.generateGenesisDocument(styleConfig)
+    this.onProgress(`世界生成完成 (${((Date.now() - t0) / 1000).toFixed(1)}s)`)
 
     // Step 3: Validation (handled by ResponseParser in step 2)
 
     // Step 4: Persist genesis document
+    this.onProgress('正在保存创世文档…')
     await this.sessionStore.saveGenesis(genesisDoc)
 
     // Step 5: Distribute to modules (strict ordering)
+    this.onProgress('正在初始化世界状态…')
     await this.distributeToModules(genesisDoc)
 
     // Step 6: Broadcast inciting event
+    this.onProgress('正在生成序幕事件…')
     await this.broadcastIncitingEvent(genesisDoc)
 
+    this.onProgress(`初始化完成 (总计 ${((Date.now() - t0) / 1000).toFixed(1)}s)`)
     return genesisDoc
   }
 
@@ -177,6 +189,8 @@ CRITICAL RULES:
 `
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      this.onProgress(`大模型调用中… (第 ${attempt + 1}/${maxRetries} 次尝试)${lastError ? ` [上次失败: ${lastError.slice(0, 120)}]` : ''}`)
+
       const systemPrompt = [
         'You are the WorldGenerator for a CRPG engine (对话式角色扮演游戏).',
         `Game Style: ${styleConfig.tone}`,
@@ -192,6 +206,7 @@ CRITICAL RULES:
         .filter(Boolean)
         .join('\n')
 
+      const callStart = Date.now()
       try {
         const response = await this.agentRunner.run(
           [
@@ -200,6 +215,7 @@ CRITICAL RULES:
           ],
           { agent_type: 'WorldGenerator' },
         )
+        this.onProgress(`大模型返回 (${((Date.now() - callStart) / 1000).toFixed(1)}s)，正在解析…`)
 
         // Pre-process: inject metadata fields and normalize enums
         const preprocessed = this.preprocessLLMOutput(response.content)
@@ -208,14 +224,20 @@ CRITICAL RULES:
         if (result.success) {
           const validationErrors = this.validateGenesisConsistency(result.data)
           if (validationErrors.length === 0) {
+            const npcCount = result.data.characters.tier_a_npcs.length + result.data.characters.tier_b_npcs.length
+            const locCount = result.data.initial_locations.length
+            this.onProgress(`解析成功: ${npcCount} 个NPC, ${locCount} 个地点, ${result.data.narrative_structure.phases.length} 个叙事阶段`)
             return result.data
           }
           lastError = validationErrors.join('; ')
+          this.onProgress(`一致性检查失败: ${lastError}`)
         } else {
           lastError = result.error.message
+          this.onProgress(`JSON解析失败: ${lastError.slice(0, 120)}`)
         }
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err)
+        this.onProgress(`调用失败: ${lastError.slice(0, 120)}`)
       }
     }
 
@@ -491,6 +513,9 @@ CRITICAL RULES:
 
     // Game time
     await this.stateStore.set('game:time', { current: { day: 0, hour: 0, turn: 0 }, total_turns: 0 })
+
+    // World tone for EventGenerator pacing
+    await this.stateStore.set('world:tone', doc.world_setting.tone)
   }
 
   private async writeCharacterStates(doc: GenesisDocument): Promise<void> {
@@ -553,6 +578,16 @@ CRITICAL RULES:
       }
       await this.stateStore.set(`memory:buffer:${npc.id}`, memoryBuffer)
     }
+
+    // NPC name→id map for resolving LLM state_changes targets
+    const nameMap: Record<string, string> = {}
+    for (const npc of doc.characters.tier_a_npcs) {
+      nameMap[npc.name] = npc.id
+    }
+    for (const npc of doc.characters.tier_b_npcs) {
+      nameMap[npc.name] = npc.id
+    }
+    await this.stateStore.set('player:npc_name_map', nameMap)
   }
 
   private async setupNarrativeRail(doc: GenesisDocument): Promise<void> {
@@ -627,6 +662,27 @@ CRITICAL RULES:
       .filter((n) => inciting.participant_ids.includes(n.id))
       .map((n) => ({ npc_id: n.id, state_summary: `${n.name}：${n.background}` }))
     await this.stateStore.set(`participants:states:${playerId}`, participantStates)
+
+    // Create minimal CharacterKnowledge for NPCs in the inciting event
+    // Only record that the player encountered them — actual impressions come from gameplay events
+    const allNpcs = [...doc.characters.tier_a_npcs, ...doc.characters.tier_b_npcs]
+    for (const npcId of inciting.participant_ids) {
+      if (npcId === playerId) continue
+      const npcDef = allNpcs.find((n) => n.id === npcId)
+      if (!npcDef) continue
+
+      const knowledge: CharacterKnowledge = {
+        npc_id: npcId,
+        name: npcDef.name,
+        first_impression: '',
+        known_facts: [],
+        relationship_to_player: '',
+        last_seen_location: startLoc?.name ?? inciting.location_id,
+        last_seen_emotion: '',
+        last_interaction_turn: 0,
+      }
+      await this.stateStore.set(`player:knowledge:${npcId}`, knowledge)
+    }
 
     if (this.eventBus) {
       await this.eventBus.publish({

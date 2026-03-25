@@ -5,6 +5,7 @@ import type {
   ArbitrationResult,
   EventGeneratorOutput,
 } from '../../domain/models/pipeline-io.js'
+import type { CharacterKnowledge } from '../../domain/models/character.js'
 import type { Event } from '../../domain/models/event.js'
 import type { SignalProcessor } from '../../domain/services/signal-processor.js'
 import { EventGeneratorOutputSchema, SignalBOutputSchema, PacingCheckOutputSchema } from '../../domain/models/pipeline-io.js'
@@ -27,9 +28,11 @@ export interface EventPipelineData {
 export class EventContextStep implements IPipelineStep<ArbitrationResult, ArbitrationResult> {
   readonly name = 'EventContextStep'
   private readonly stateStore: IStateStore
+  private readonly eventStore: IEventStore
 
-  constructor(stateStore: IStateStore) {
+  constructor(stateStore: IStateStore, eventStore: IEventStore) {
     this.stateStore = stateStore
+    this.eventStore = eventStore
   }
 
   async execute(
@@ -38,7 +41,7 @@ export class EventContextStep implements IPipelineStep<ArbitrationResult, Arbitr
   ): Promise<StepResult<ArbitrationResult>> {
     const characterId = context.player_character_id
 
-    const [worldState, participantStates, subjectiveMemory] = await Promise.all([
+    const [worldState, participantStates, subjectiveMemory, worldTone] = await Promise.all([
       this.stateStore.get<string>(`world:summary:${characterId}`),
       this.stateStore.get<Array<{ npc_id: string; state_summary: string }>>(
         `participants:states:${characterId}`,
@@ -48,6 +51,7 @@ export class EventContextStep implements IPipelineStep<ArbitrationResult, Arbitr
         known_facts: string[]
         known_characters: string[]
       }>(`memory:subjective:${characterId}`),
+      this.stateStore.get<string>('world:tone'),
     ])
 
     context.data.set('event_world_state', worldState ?? 'No world state available.')
@@ -55,6 +59,12 @@ export class EventContextStep implements IPipelineStep<ArbitrationResult, Arbitr
     // Pass recent narrative history so EventGenerator knows what just happened
     context.data.set('event_recent_narrative', subjectiveMemory?.recent_narrative?.slice(-5) ?? [])
     context.data.set('event_known_facts', subjectiveMemory?.known_facts?.slice(-10) ?? [])
+    context.data.set('world_tone', worldTone ?? '')
+
+    // Recent event weights for pacing awareness
+    const allEvents = await this.eventStore.getAllTier1()
+    const recentWeights = allEvents.slice(-5).map((e) => e.weight)
+    context.data.set('recent_event_weights', recentWeights)
 
     return { status: 'continue', data: input }
   }
@@ -165,14 +175,34 @@ export class EventGeneratorStep
       pacingInstruction = 'PACING: This is a narrative moment. Write vivid, immersive narrative_text at whatever length serves the story.'
     }
 
+    // Tone from world setting
+    const worldTone = context.data.get('world_tone') as string | undefined
+    const toneInstruction = worldTone
+      ? `TONE (MANDATORY): The world's tone is "${worldTone}". Your narrative MUST match this tone. If the tone is comedic, write comedy even during tense moments. If the tone is melancholic, maintain that even during victories. The tone is the soul of this world — never betray it. A horror scene in a comedy world should still have comedic undertones. A romance world should weave character chemistry into every scene.`
+      : ''
+
+    // Pacing tension control from recent event weights
+    const recentWeights = context.data.get('recent_event_weights') as string[] | undefined
+    let tensionInstruction = ''
+    if (recentWeights && recentWeights.length >= 3) {
+      const highTensionCount = recentWeights.filter((w) => w === 'MAJOR' || w === 'SIGNIFICANT').length
+      if (highTensionCount >= 3) {
+        tensionInstruction = 'TENSION CONTROL (CRITICAL): The last several events have ALL been high-tension (SIGNIFICANT/MAJOR). The story NEEDS a breather. This event MUST be lower intensity — use PRIVATE or MINOR weight. Include character interactions, quiet moments, dialogue, humor, or reflection. Constant high tension is exhausting and bad storytelling. Let the reader breathe before the next climax.'
+      } else if (highTensionCount === 0) {
+        tensionInstruction = 'TENSION NOTE: Recent events have been calm. If the player\'s action warrants it, you may escalate tension.'
+      }
+    }
+
     const systemPrompt = [
       'You are the EventGenerator agent for a CRPG engine.',
       'Generate a complete event from the given action and context.',
-      'IMPORTANT: The player has full freedom to roleplay ANY personality. If the action is socially reckless, rude, absurd, or provocative, DO NOT soften or redirect it — faithfully execute the action and let the WORLD react with realistic consequences (NPCs get angry, guards intervene, allies lose trust, opportunities close, etc.). The player chose this; honor their agency.',
+      toneInstruction,
+      tensionInstruction,
+      'IMPORTANT: The player has full freedom to roleplay ANY personality. If the action is socially reckless, rude, absurd, or provocative, DO NOT soften or redirect it — faithfully execute the action and let the WORLD react with realistic consequences (NPCs get angry, guard intervene, allies lose trust, opportunities close, etc.). The player chose this; honor their agency.',
       'CRITICAL — NARRATIVE CONTINUITY: You MUST read the recent_narrative carefully. NPCs remember what just happened. If the player attacked or insulted an NPC in a previous turn, that NPC will NOT suddenly act friendly or ignore the conflict. NPC emotional states, injuries, hostilities, and relationship changes from recent events MUST carry forward. Breaking continuity is the worst possible error.',
       'ATTRIBUTE CHECK: If an attribute_check is provided, the narrative MUST reflect its outcome. If passed, the character succeeds at the skill-dependent part. If failed, the character fails or only partially succeeds — describe the failure naturally without breaking immersion.',
       'PLAYER WISH: If player_wish is provided, it represents things the player HOPED would happen (e.g. encountering a specific NPC). You are NOT obligated to honor these wishes. Only incorporate them if they make narrative sense given the current context, location, and NPC states. If they don\'t make sense, simply ignore them — the world follows its own logic.',
-      'DECISION POINT: The narrative MUST end at a moment that demands the player\'s next decision. Do NOT wrap up the scene into a neat conclusion. Instead, stop at a point of tension, a fork in the road, or an unresolved situation where the player must choose what to do next. Examples: an NPC asks a question and waits for an answer; a new threat appears; the player faces two or more possible next moves; a consequence is about to unfold and the player can still react. The player should never feel "the scene is over, now what?" — they should feel "I need to act NOW."',
+      'DECISION POINT: The narrative MUST end at a moment that invites the player\'s next decision. This does NOT always mean a cliffhanger or crisis. A decision point can be: an NPC asking a casual question, choosing where to go next, deciding how to spend free time, a conversation fork, or simply a new situation that has multiple interesting responses. Match the decision point to the current tension level — not every scene needs life-or-death urgency.',
       'FORMATTING RULES for narrative_text:',
       '- Separate paragraphs with \\n\\n (double newline). NEVER write a wall of text.',
       '- Each paragraph should focus on one beat: a description, an action, or a dialogue line.',
@@ -182,7 +212,8 @@ export class EventGeneratorStep
       '- Keep paragraphs short — 1-3 sentences max. Dense prose kills readability.',
       forceInstruction,
       pacingInstruction,
-      'Respond with ONLY valid JSON: { "title": string, "tags": string[], "weight": "PRIVATE"|"MINOR"|"SIGNIFICANT"|"MAJOR", "summary": string, "context": string, "narrative_text": string, "state_changes": [{ "target": string, "field": string, "change_description": string }] }',
+      'CHARACTER OBSERVATIONS: For every NPC who appears in this scene, include a character_observations entry describing what the PLAYER CHARACTER can observe about them RIGHT NOW — appearance, demeanor, tone of voice, body language, visible emotions. Do NOT include backstory, secrets, or information the player couldn\'t perceive. Write from the player character\'s perspective.',
+      'Respond with ONLY valid JSON: { "title": string, "tags": string[], "weight": "PRIVATE"|"MINOR"|"SIGNIFICANT"|"MAJOR", "summary": string, "context": string, "narrative_text": string, "state_changes": [{ "target": string, "field": string, "change_description": string }], "character_observations": [{ "npc_name": string, "observation": string, "relationship_hint": string (optional, only if relationship change is apparent) }] }',
     ]
       .filter(Boolean)
       .join('\n')
@@ -202,6 +233,8 @@ export class EventGeneratorStep
       action: input.action,
       force_flag: input.force_flag,
       force_level: input.force_level,
+      world_tone: worldTone ?? null,
+      recent_event_weights: recentWeights ?? [],
       world_state_summary: worldState,
       participants_state: participantStates ?? [],
       recent_narrative: recentNarrative ?? [],
@@ -455,7 +488,119 @@ export class StateWritebackStep implements IPipelineStep<EventPipelineData, Even
       `当前场景：${gen.narrative_text}`,
     ].join('\n'))
 
+    // Update player's CharacterKnowledge from state_changes + character_observations
+    await this.updateCharacterKnowledge(gen, context)
+
     return { status: 'continue', data: input }
+  }
+  private async updateCharacterKnowledge(
+    gen: EventGeneratorOutput,
+    context: PipelineContext,
+  ): Promise<void> {
+    // Load NPC name→id map for target resolution
+    const nameMap = await this.stateStore.get<Record<string, string>>('player:npc_name_map')
+    if (!nameMap) return
+
+    const idSet = new Set(Object.values(nameMap))
+
+    // Helper: resolve a name or id to NPC id
+    const resolveNpcId = (target: string): string | null => {
+      if (idSet.has(target)) return target
+      if (nameMap[target]) return nameMap[target]
+      return null
+    }
+
+    // Helper: resolve NPC id to name
+    const resolveNpcName = (npcId: string): string => {
+      return Object.entries(nameMap).find(([, id]) => id === npcId)?.[0] ?? npcId
+    }
+
+    // Helper: get or create knowledge entry
+    const getOrCreate = async (npcId: string): Promise<CharacterKnowledge> => {
+      const existing = await this.stateStore.get<CharacterKnowledge>(`player:knowledge:${npcId}`)
+      if (existing) return existing
+      return {
+        npc_id: npcId,
+        name: resolveNpcName(npcId),
+        first_impression: '',
+        known_facts: [],
+        relationship_to_player: '',
+        last_seen_location: '',
+        last_seen_emotion: '',
+        last_interaction_turn: context.turn_number,
+      }
+    }
+
+    const touched = new Set<string>()
+
+    // 1. Process character_observations (player-perspective impressions)
+    if (gen.character_observations && gen.character_observations.length > 0) {
+      for (const obs of gen.character_observations) {
+        const npcId = resolveNpcId(obs.npc_name)
+        if (!npcId) continue
+
+        const knowledge = await getOrCreate(npcId)
+        touched.add(npcId)
+
+        // First observation becomes first_impression if empty
+        if (!knowledge.first_impression) {
+          knowledge.first_impression = obs.observation
+        } else {
+          // Subsequent observations go to known_facts
+          const last = knowledge.known_facts[knowledge.known_facts.length - 1]
+          if (last !== obs.observation) {
+            knowledge.known_facts.push(obs.observation)
+          }
+        }
+
+        if (obs.relationship_hint) {
+          knowledge.relationship_to_player = obs.relationship_hint
+        }
+
+        knowledge.last_interaction_turn = context.turn_number
+        await this.stateStore.set(`player:knowledge:${npcId}`, knowledge)
+      }
+    }
+
+    // 2. Process state_changes for additional fact accumulation
+    if (gen.state_changes && gen.state_changes.length > 0) {
+      for (const sc of gen.state_changes) {
+        const npcId = resolveNpcId(sc.target)
+        if (!npcId) continue
+
+        const knowledge = await getOrCreate(npcId)
+        touched.add(npcId)
+
+        // Append as known fact (deduplicate)
+        const last = knowledge.known_facts[knowledge.known_facts.length - 1]
+        if (last !== sc.change_description) {
+          knowledge.known_facts.push(sc.change_description)
+        }
+
+        const fieldLower = sc.field.toLowerCase()
+        if (fieldLower.includes('emotion') || fieldLower.includes('情绪')) {
+          knowledge.last_seen_emotion = sc.change_description
+        }
+        if (fieldLower.includes('location') || fieldLower.includes('位置')) {
+          knowledge.last_seen_location = sc.change_description
+        }
+        if (fieldLower.includes('relationship') || fieldLower.includes('关系') || fieldLower.includes('态度')) {
+          knowledge.relationship_to_player = sc.change_description
+        }
+
+        knowledge.last_interaction_turn = context.turn_number
+        await this.stateStore.set(`player:knowledge:${npcId}`, knowledge)
+      }
+    }
+
+    // Cap known_facts for all touched entries
+    for (const npcId of touched) {
+      const knowledge = await this.stateStore.get<CharacterKnowledge>(`player:knowledge:${npcId}`)
+      if (knowledge && knowledge.known_facts.length > 50) {
+        knowledge.known_facts.splice(0, knowledge.known_facts.length - 50)
+        await this.stateStore.set(`player:knowledge:${npcId}`, knowledge)
+      }
+    }
   }
 }
 

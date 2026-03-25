@@ -84,6 +84,21 @@ export const ConversationHistorySchema = z.object({
 export type ConversationHistory = z.infer<typeof ConversationHistorySchema>
 
 // ============================================================
+// Player Character Knowledge (what the player knows about an NPC)
+// ============================================================
+
+export interface CharacterKnowledge {
+  npc_id: string
+  name: string
+  first_impression: string
+  known_facts: string[]
+  relationship_to_player: string
+  last_seen_location: string
+  last_seen_emotion: string
+  last_interaction_turn: number
+}
+
+// ============================================================
 // Tier C Template
 // ============================================================
 

@@ -10,6 +10,8 @@ import { STYLE_PRESETS } from '../domain/services/extension-config.js'
 import type { StyleConfig } from '../domain/services/extension-config.js'
 import { ClientMessageSchema } from './protocol.js'
 import type { ServerMessage } from './protocol.js'
+import { loadLLMConfig, detectEnvConfig, saveLLMConfig, createProviderFromConfig, testLLMConnection, listModels } from './llm-config.js'
+import type { LLMConfig } from './llm-config.js'
 
 // ============================================================
 // WsBridge — forwards GameEventListener calls to a WebSocket
@@ -393,6 +395,16 @@ export class GameServer {
         await this.gameLoop.retry()
         break
 
+      case 'get_characters': {
+        const info = await this.gameLoop.getCharacterInfo()
+        if (info) {
+          this.bridge.sendDirect({ type: 'characters', player: info.player, npcs: info.npcs })
+        } else {
+          this.bridge.send({ type: 'error', message: '游戏尚未初始化' })
+        }
+        break
+      }
+
       // Session management
       case 'list_sessions':
         this.bridge.sendDirect({
@@ -466,6 +478,60 @@ export class GameServer {
           })),
         })
         break
+
+      case 'get_llm_config': {
+        const config = loadLLMConfig() ?? detectEnvConfig()
+        if (config) {
+          this.bridge.sendDirect({ type: 'llm_config', config })
+        } else {
+          this.bridge.sendDirect({ type: 'llm_config', config: { provider: '', api_key: '', model: '' } })
+        }
+        break
+      }
+
+      case 'set_llm_config': {
+        const newConfig: LLMConfig = {
+          provider: msg.provider,
+          api_key: msg.api_key,
+          model: msg.model,
+          base_url: msg.base_url,
+        }
+        try {
+          // Validate by creating the provider (will throw on bad config)
+          const newProvider = createProviderFromConfig(newConfig)
+          saveLLMConfig(newConfig)
+          // Hot-swap the provider in GameLoop
+          this.gameLoop.setProvider(newProvider)
+          this.bridge.sendDirect({ type: 'llm_config_saved' })
+        } catch (err) {
+          this.bridge.send({ type: 'error', message: `配置无效: ${err instanceof Error ? err.message : String(err)}` })
+        }
+        break
+      }
+
+      case 'test_llm_config': {
+        const testConfig: LLMConfig = {
+          provider: msg.provider,
+          api_key: msg.api_key,
+          model: msg.model,
+          base_url: msg.base_url,
+        }
+        testLLMConnection(testConfig).then((result) => {
+          this.bridge.sendDirect({ type: 'llm_test_result', ...result })
+        })
+        break
+      }
+
+      case 'list_models': {
+        listModels({ provider: msg.provider, api_key: msg.api_key, base_url: msg.base_url })
+          .then((models) => {
+            this.bridge.sendDirect({ type: 'model_list', models })
+          })
+          .catch((err) => {
+            this.bridge.send({ type: 'error', message: `获取模型列表失败: ${err instanceof Error ? err.message : String(err)}` })
+          })
+        break
+      }
     }
   }
 

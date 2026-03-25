@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ClientMessage } from '../types/protocol'
+import type { ClientMessage, CharacterInfo } from '../types/protocol'
 
 export interface NarrativeLine {
   text: string
@@ -28,6 +28,13 @@ export interface SessionEntry {
   turn: number
   location: string
   updated_at: number
+}
+
+export interface LLMConfigState {
+  provider: string
+  api_key: string
+  model: string
+  base_url?: string
 }
 
 export interface DebugStepEntry {
@@ -72,10 +79,21 @@ interface GameState {
   // Retryable error
   retryable: boolean
 
+  // Characters
+  playerInfo: CharacterInfo | null
+  npcList: CharacterInfo[]
+
   // Sessions
   sessionList: SessionEntry[] | null
 
+  // LLM Settings
+  llmConfig: LLMConfigState | null
+  settingsOpen: boolean
+  llmTestResult: { success: boolean; message: string } | null
+  llmModels: string[] | null
+
   // Debug
+  debugInitLog: Array<{ message: string; timestamp: number }>
   debugTurns: DebugTurn[]
 
   // Actions
@@ -91,7 +109,13 @@ interface GameState {
   setCharCreate: (state: CharCreateState | null) => void
   setInsistencePrompt: (v: boolean) => void
   setRetryable: (v: boolean) => void
+  setCharacters: (player: CharacterInfo, npcs: CharacterInfo[]) => void
   setSessionList: (sessions: SessionEntry[] | null) => void
+  setLLMConfig: (config: LLMConfigState | null) => void
+  setSettingsOpen: (v: boolean) => void
+  setLLMTestResult: (r: { success: boolean; message: string } | null) => void
+  setLLMModels: (models: string[] | null) => void
+  appendInitLog: (message: string) => void
   resetGame: () => void
   debugTurnStart: (turn: number, input: string) => void
   debugStepEvent: (entry: DebugStepEntry) => void
@@ -120,8 +144,17 @@ export const useGameStore = create<GameState>((set) => ({
 
   retryable: false,
 
+  playerInfo: null,
+  npcList: [],
+
   sessionList: null,
 
+  llmConfig: null,
+  settingsOpen: false,
+  llmTestResult: null,
+  llmModels: null,
+
+  debugInitLog: [],
   debugTurns: [],
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
@@ -141,7 +174,15 @@ export const useGameStore = create<GameState>((set) => ({
   setCharCreate: (charCreate) => set({ charCreate }),
   setInsistencePrompt: (insistencePrompt) => set({ insistencePrompt }),
   setRetryable: (retryable) => set({ retryable }),
+  setCharacters: (playerInfo, npcList) => set({ playerInfo, npcList }),
   setSessionList: (sessionList) => set({ sessionList }),
+  setLLMConfig: (llmConfig) => set({ llmConfig }),
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setLLMTestResult: (llmTestResult) => set({ llmTestResult }),
+  setLLMModels: (llmModels) => set({ llmModels }),
+
+  appendInitLog: (message) =>
+    set((s) => ({ debugInitLog: [...s.debugInitLog, { message, timestamp: Date.now() }] })),
 
   resetGame: () =>
     set({
@@ -156,7 +197,10 @@ export const useGameStore = create<GameState>((set) => ({
       charCreate: null,
       insistencePrompt: false,
       retryable: false,
+      playerInfo: null,
+      npcList: [],
       sessionList: null,
+      debugInitLog: [],
       debugTurns: [],
     }),
 
