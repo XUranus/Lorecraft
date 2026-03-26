@@ -23,8 +23,7 @@ export {
 // AI Layer
 export {
   AgentRunner,
-  AnthropicProvider,
-  GeminiProvider,
+  AISdkProvider,
   ResponseParser,
   PromptRegistry,
   TokenBudgetManager,

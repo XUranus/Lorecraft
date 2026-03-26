@@ -6,10 +6,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { setGlobalDispatcher, ProxyAgent } from 'undici'
 import type { ILLMProvider } from './ai/runner/llm-provider.js'
-import { AnthropicProvider } from './ai/runner/anthropic-provider.js'
-import { GeminiProvider } from './ai/runner/gemini-provider.js'
-import { OpenAIProvider } from './ai/runner/openai-provider.js'
-import { loadLLMConfig, createProviderFromConfig } from './server/llm-config.js'
+import { loadLLMConfig, detectEnvConfig, createProviderFromConfig } from './server/llm-config.js'
 
 // ============================================================
 // Config Loading: ~/.config/lorecraft/.env → project .env → env vars
@@ -55,7 +52,7 @@ setupProxy()
 // ============================================================
 
 function createProvider(): ILLMProvider {
-  // Priority 0: Saved UI config (from settings page)
+  // Priority 1: Saved UI config (from settings page)
   const savedConfig = loadLLMConfig()
   if (savedConfig && savedConfig.api_key) {
     try {
@@ -67,55 +64,11 @@ function createProvider(): ILLMProvider {
     }
   }
 
-  const providerName = process.env.LLM_PROVIDER?.toLowerCase() ?? 'auto'
-
-  if (providerName === 'gemini' || providerName === 'google') {
-    return new GeminiProvider(
-      process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY,
-      process.env.GEMINI_MODEL,
-    )
-  }
-
-  if (providerName === 'anthropic' || providerName === 'claude') {
-    const key = process.env.ANTHROPIC_API_KEY
-    if (!key) {
-      console.error('ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic')
-      process.exit(1)
-    }
-    return new AnthropicProvider({ apiKey: key, model: process.env.ANTHROPIC_MODEL })
-  }
-
-  if (providerName === 'openai' || providerName === 'openai-compatible') {
-    const key = process.env.OPENAI_API_KEY
-    if (!key) {
-      console.error('OPENAI_API_KEY is required when LLM_PROVIDER=openai')
-      process.exit(1)
-    }
-    return new OpenAIProvider({
-      apiKey: key,
-      model: process.env.OPENAI_MODEL,
-      baseURL: process.env.OPENAI_BASE_URL,
-    })
-  }
-
-  // Auto-detect based on available API keys
-  if (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) {
-    return new GeminiProvider()
-  }
-
-  if (process.env.ANTHROPIC_API_KEY) {
-    return new AnthropicProvider({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      model: process.env.ANTHROPIC_MODEL,
-    })
-  }
-
-  if (process.env.OPENAI_API_KEY) {
-    return new OpenAIProvider({
-      apiKey: process.env.OPENAI_API_KEY,
-      model: process.env.OPENAI_MODEL,
-      baseURL: process.env.OPENAI_BASE_URL,
-    })
+  // Priority 2: Environment variables
+  const envConfig = detectEnvConfig()
+  if (envConfig) {
+    console.log(`[LLM] Using env config: ${envConfig.provider} / ${envConfig.model || 'default'}`)
+    return createProviderFromConfig(envConfig)
   }
 
   console.error('No API key found.')
@@ -130,11 +83,7 @@ function createProvider(): ILLMProvider {
   console.error('  GEMINI_API_KEY       (Google Gemini)')
   console.error('  ANTHROPIC_API_KEY    (Anthropic Claude)')
   console.error('  OPENAI_API_KEY       (OpenAI or compatible APIs)')
-  console.error('')
-  console.error('For OpenAI-compatible APIs (e.g., local LLMs), set:')
-  console.error('  LLM_PROVIDER=openai')
-  console.error('  OPENAI_API_KEY=your-key')
-  console.error('  OPENAI_BASE_URL=http://localhost:11434/v1')
+  console.error('  XAI_API_KEY          (xAI Grok)')
   process.exit(1)
 }
 
