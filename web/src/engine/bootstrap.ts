@@ -16,6 +16,7 @@ const promptModules = import.meta.glob('../../../prompts/*.prompt', {
 
 let _engine: GameLoop | null = null
 let _store: SqlJsStore | null = null
+let _llmConfigured = false
 
 export async function createEngine(): Promise<GameLoop> {
   // 1. Init prompts from bundled files
@@ -35,6 +36,7 @@ export async function createEngine(): Promise<GameLoop> {
   if (config && config.api_key) {
     try {
       provider = createProviderFromConfig(config)
+      _llmConfigured = true
     } catch {
       // Will be set later via settings UI
     }
@@ -60,4 +62,12 @@ export function getEngine(): GameLoop | null {
 
 export function getStore(): SqlJsStore | null {
   return _store
+}
+
+export function isLLMConfigured(): boolean {
+  return _llmConfigured
+}
+
+export function setLLMConfigured(v: boolean): void {
+  _llmConfigured = v
 }

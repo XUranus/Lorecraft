@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useGameStore } from '../stores/useGameStore'
-import { createEngine, getEngine } from '../engine/bootstrap'
+import { createEngine, getEngine, isLLMConfigured, setLLMConfigured } from '../engine/bootstrap'
 import type { GameEventListener } from '@engine/engine/game-loop'
 import type { GameLoop } from '@engine/engine/game-loop'
 import type { GenesisDocument } from '@engine/domain/models/genesis'
@@ -303,6 +303,10 @@ async function handleMessage(
       }
 
       case 'new_game':
+        if (!isLLMConfigured()) {
+          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API，才能开始游戏。', 'system')
+          return
+        }
         if (initializedRef.current || initializingRef.current) {
           store.getState().appendNarrative('[错误] 游戏已在进行中，请先重置', 'error')
           return
@@ -311,6 +315,10 @@ async function handleMessage(
         break
 
       case 'select_style': {
+        if (!isLLMConfigured()) {
+          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API。', 'system')
+          return
+        }
         if (!engine.isAwaitingStyleSelect) {
           store.getState().appendNarrative('[错误] 当前不在风格选择阶段', 'error')
           return
@@ -338,6 +346,10 @@ async function handleMessage(
       }
 
       case 'select_style_custom':
+        if (!isLLMConfigured()) {
+          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API。', 'system')
+          return
+        }
         if (!engine.isAwaitingStyleSelect) {
           store.getState().appendNarrative('[错误] 当前不在风格选择阶段', 'error')
           return
@@ -375,6 +387,10 @@ async function handleMessage(
         break
 
       case 'input':
+        if (!isLLMConfigured()) {
+          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API。', 'system')
+          return
+        }
         if (!initializedRef.current) {
           store.getState().appendNarrative('[错误] 游戏尚未初始化', 'error')
           return
@@ -385,6 +401,10 @@ async function handleMessage(
         break
 
       case 'select_choice': {
+        if (!isLLMConfigured()) {
+          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API。', 'system')
+          return
+        }
         if (!initializedRef.current) {
           store.getState().appendNarrative('[错误] 游戏尚未初始化', 'error')
           return
@@ -533,6 +553,7 @@ async function handleMessage(
           const newProvider = createProviderFromConfig(newConfig)
           saveLLMConfig(newConfig)
           engine.setProvider(newProvider)
+          setLLMConfigured(true)
           store.getState().appendNarrative('[系统] 大模型配置已保存', 'system')
         } catch (err) {
           store.getState().appendNarrative(`[错误] 配置无效: ${err instanceof Error ? err.message : String(err)}`, 'error')
