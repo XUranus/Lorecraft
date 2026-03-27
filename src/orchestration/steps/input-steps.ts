@@ -129,6 +129,10 @@ export class WorldAssertionFilterStep implements IPipelineStep<ParsedIntent, Par
   readonly name = 'WorldAssertionFilterStep'
 
   async execute(input: ParsedIntent, context: PipelineContext): Promise<StepResult<ParsedIntent>> {
+    if (!context.options.world_assertion) {
+      return { status: 'continue', data: input }
+    }
+
     const assertions = input.world_assertions ?? []
 
     if (assertions.length > 0) {
@@ -184,7 +188,9 @@ export class ToneSignalStep implements IPipelineStep<ParsedIntent, InputPipeline
     input: ParsedIntent,
     context: PipelineContext,
   ): Promise<StepResult<InputPipelineOutput>> {
-    const toneSignals: ToneSignals = input.tone_signals
+    const toneSignals: ToneSignals = context.options.world_assertion
+      ? input.tone_signals
+      : { humor: 0, tension: 0, formality: 0 }
     context.data.set('tone_signals', toneSignals)
 
     const output: InputPipelineOutput = {

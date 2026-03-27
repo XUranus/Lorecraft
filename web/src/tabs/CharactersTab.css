@@ -125,33 +125,32 @@
 .char-attr-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-size: 13px;
 }
 
 .char-attr-name {
-  width: 34px;
-  color: var(--voice);
+  width: 40px;
+  color: var(--fg);
   font-family: var(--font-ui);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 12px;
   flex-shrink: 0;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
 }
 
 .char-attr-bar-bg {
   flex: 1;
-  height: 4px;
+  height: 6px;
   background: rgba(255, 255, 255, 0.04);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .char-attr-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--title-dim), var(--title));
-  border-radius: 2px;
-  transition: width 0.4s var(--ease-out);
+  border-radius: 3px;
+  transition: width 0.4s var(--ease-out), background 0.3s;
 }
 
 .char-attr-val {

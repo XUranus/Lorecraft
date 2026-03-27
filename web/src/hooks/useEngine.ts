@@ -43,6 +43,15 @@ export function useEngine() {
 
         store.getState().setConnectionStatus('connected')
 
+        // Restore saved gameplay options
+        const savedOpts = localStorage.getItem('lorecraft:gameplay-options')
+        if (savedOpts) {
+          try {
+            engine.setGameplayOptions(JSON.parse(savedOpts))
+            store.getState().setGameplayOptions(engine.getGameplayOptions())
+          } catch { /* ignore corrupt data */ }
+        }
+
         // Set up the dispatch function so UI can send messages
         store.getState().setSend((msg: ClientMessage) => {
           handleMessage(engine, msg, store, sessionMessagesRef, initializingRef, initializedRef)
@@ -245,6 +254,10 @@ function createListener(
 
     onDebugState(states: Record<string, unknown>) {
       store.getState().debugSetState(states)
+    },
+
+    onDebugError(errorContext: import('@engine/engine/game-loop').DebugErrorContext) {
+      store.getState().debugAddError(errorContext)
     },
   }
 }
@@ -470,8 +483,6 @@ async function handleMessage(
         const info = await engine.getCharacterInfo()
         if (info) {
           store.getState().setCharacters(info.player, info.npcs)
-        } else {
-          store.getState().appendNarrative('[错误] 游戏尚未初始化', 'error')
         }
         break
       }
@@ -585,6 +596,18 @@ async function handleMessage(
           store.getState().appendNarrative(`[错误] 获取模型列表失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
         }
         break
+
+      case 'get_gameplay_options':
+        store.getState().setGameplayOptions(engine.getGameplayOptions())
+        break
+
+      case 'set_gameplay_options': {
+        engine.setGameplayOptions(msg.options)
+        const updated = engine.getGameplayOptions()
+        store.getState().setGameplayOptions(updated)
+        localStorage.setItem('lorecraft:gameplay-options', JSON.stringify(updated))
+        break
+      }
     }
   } catch (err) {
     store.getState().appendNarrative(

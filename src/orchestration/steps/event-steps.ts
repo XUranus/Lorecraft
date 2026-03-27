@@ -673,6 +673,10 @@ export class NarrativeProgressStep implements IPipelineStep<EventPipelineData, E
     input: EventPipelineData,
     context: PipelineContext,
   ): Promise<StepResult<EventPipelineData>> {
+    if (!context.options.narrative_progress) {
+      return { status: 'continue', data: input }
+    }
+
     const phases = await this.stateStore.get<Array<{ phase_id: string; description: string; direction_summary: string }>>('narrative:phases')
     if (!phases || phases.length === 0) {
       return { status: 'continue', data: input }

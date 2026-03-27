@@ -187,3 +187,86 @@
   margin-top: 3px;
   opacity: 0.7;
 }
+
+/* ── Gameplay Toggles ── */
+.gameplay-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gameplay-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.gameplay-toggle:hover:not(.disabled) {
+  background: var(--bg-hover);
+}
+
+.gameplay-toggle.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.gameplay-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gameplay-toggle-label {
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.gameplay-toggle-desc {
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.gameplay-toggle-input {
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.gameplay-toggle-input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  transition: transform var(--duration-fast), background var(--duration-fast);
+}
+
+.gameplay-toggle-input:checked {
+  background: rgba(196, 149, 106, 0.2);
+  border-color: var(--border-accent);
+}
+
+.gameplay-toggle-input:checked::after {
+  transform: translateX(16px);
+  background: var(--title);
+}

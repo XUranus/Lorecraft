@@ -4,6 +4,19 @@ import { registerTab } from './registry'
 import type { CharacterInfo } from '../types/protocol'
 import './CharactersTab.css'
 
+const ATTR_NAMES: Record<string, string> = {
+  strength: '力量', constitution: '体质', agility: '敏捷', intelligence: '智力',
+  perception: '感知', willpower: '意志', charisma: '魅力', luck: '幸运',
+}
+
+function attrTierColor(val: number): string {
+  if (val > 90) return 'var(--title)'       // tier-4: gold
+  if (val > 60) return 'var(--system)'      // tier-3: green
+  if (val > 30) return 'var(--fg-muted)'    // tier-2: gray
+  if (val > 10) return '#7a6a58'            // tier-1: brown
+  return '#684848'                           // tier-0: dark red
+}
+
 function CharactersTab() {
   const send = useGameStore((s) => s.send)
   const playerInfo = useGameStore((s) => s.playerInfo)
@@ -67,15 +80,18 @@ function CharactersTab() {
               <section className="char-section">
                 <h3>属性</h3>
                 <div className="char-attrs">
-                  {Object.entries(selected.attributes).map(([key, val]) => (
-                    <div key={key} className="char-attr-row">
-                      <span className="char-attr-name">{key}</span>
-                      <div className="char-attr-bar-bg">
-                        <div className="char-attr-bar" style={{ width: `${val}%` }} />
+                  {Object.entries(selected.attributes).map(([key, val]) => {
+                    const color = attrTierColor(val as number)
+                    return (
+                      <div key={key} className="char-attr-row">
+                        <span className="char-attr-name">{ATTR_NAMES[key] ?? key}</span>
+                        <div className="char-attr-bar-bg">
+                          <div className="char-attr-bar" style={{ width: `${val}%`, background: color }} />
+                        </div>
+                        <span className="char-attr-val" style={{ color }}>{val}</span>
                       </div>
-                      <span className="char-attr-val">{val}</span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </section>
             )}

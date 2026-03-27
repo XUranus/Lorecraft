@@ -32,6 +32,11 @@ export class ActiveTraitStep implements IPipelineStep<ParsedIntent, ParsedIntent
   readonly name = 'ActiveTraitStep'
 
   async execute(input: ParsedIntent, context: PipelineContext): Promise<StepResult<ParsedIntent>> {
+    if (!context.options.inner_voice) {
+      context.data.set('skip_reflection_llm', true)
+      return { status: 'continue', data: input }
+    }
+
     const attrs = context.data.get('player_attributes') as PlayerAttributes | undefined
 
     if (!attrs) {
@@ -85,7 +90,7 @@ export class ShouldSpeakStep implements IPipelineStep<ParsedIntent, ParsedIntent
     const skipLlm = context.data.get('skip_reflection_llm') === true
     const injectedContext = context.data.get('injected_context') as string | null
 
-    if (skipLlm && !injectedContext && input.ambiguity_flags.length === 0) {
+    if (skipLlm && !injectedContext && (input.ambiguity_flags?.length ?? 0) === 0) {
       context.data.set('reflection_silent', true)
       return { status: 'continue', data: input }
     }
@@ -204,6 +209,18 @@ export class InsistenceStep implements IPipelineStep<ParsedIntent, ReflectionPip
     const traitVoices = context.data.get('trait_voices') as TraitVoiceOutput | undefined
     const debateOutput = context.data.get('debate_output') as DebateOutput | null
     const voices = traitVoices?.voices ?? []
+
+    // When insistence is disabled, pass through without blocking
+    if (!context.options.insistence) {
+      const output: ReflectionPipelineOutput = {
+        voices,
+        debate_lines: debateOutput?.debate_lines ?? [],
+        force_flag: false,
+        force_level: 0,
+      }
+      context.data.set('reflection_output', output)
+      return { status: 'continue', data: output }
+    }
 
     const currentState = (context.data.get('insistence_state') as InsistenceState | undefined) ?? 'NORMAL'
     const hasWarnStance = voices.some((v) => v.stance === 'WARN')

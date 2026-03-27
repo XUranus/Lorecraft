@@ -4,12 +4,21 @@ import { registerTab } from './registry'
 import { PROVIDERS, type ProviderFields, emptyFields, getModelPlaceholder } from '../shared/provider-defs'
 import './SettingsTab.css'
 
+const GAMEPLAY_TOGGLES: Array<{ key: keyof import('../types/protocol').GameplayOptions; label: string; desc: string; invert?: boolean }> = [
+  { key: 'inner_voice', label: '内心声音', desc: '属性人格会对你的行动发表看法' },
+  { key: 'insistence', label: '坚持机制', desc: '内心声音可以阻止你的行动，需要坚持才能执行' },
+  { key: 'action_arbiter', label: '行动仲裁', desc: '判断行动可行性并触发属性检定' },
+  { key: 'narrative_progress', label: '叙事进度', desc: '追踪剧情阶段推进，引导故事节奏' },
+  { key: 'world_assertion', label: '禁止世界断言', desc: '开启后，忽略玩家输入中对世界的断言和语气暗示', invert: true },
+]
+
 function SettingsTab() {
   const llmConfig = useGameStore((s) => s.llmConfig)
   const testResult = useGameStore((s) => s.llmTestResult)
   const modelList = useGameStore((s) => s.llmModels)
   const isProcessing = useGameStore((s) => s.isProcessing)
   const send = useGameStore((s) => s.send)
+  const gameplayOptions = useGameStore((s) => s.gameplayOptions)
 
   const [provider, setProvider] = useState('gemini')
   const fieldsRef = useRef<Record<string, ProviderFields>>({})
@@ -161,6 +170,39 @@ function SettingsTab() {
             {testResult.success ? '连接成功' : `连接失败: ${testResult.message}`}
           </div>
         )}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">游戏选项</div>
+        <div className="gameplay-toggles">
+          {GAMEPLAY_TOGGLES.map((t) => {
+            const disabled = t.key === 'insistence' && !gameplayOptions.inner_voice
+            const rawVal = disabled ? false : gameplayOptions[t.key]
+            const checked = t.invert ? !rawVal : rawVal
+            return (
+              <label key={t.key} className={`gameplay-toggle ${disabled ? 'disabled' : ''}`}>
+                <div className="gameplay-toggle-text">
+                  <span className="gameplay-toggle-label">{t.label}</span>
+                  <span className="gameplay-toggle-desc">{t.desc}</span>
+                </div>
+                <input
+                  type="checkbox"
+                  className="gameplay-toggle-input"
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={(e) => {
+                    const newVal = t.invert ? !e.target.checked : e.target.checked
+                    const updates: Record<string, boolean> = { [t.key]: newVal }
+                    if (t.key === 'inner_voice' && !newVal) {
+                      updates.insistence = false
+                    }
+                    send({ type: 'set_gameplay_options', options: updates })
+                  }}
+                />
+              </label>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

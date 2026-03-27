@@ -4,7 +4,8 @@ import type { IDebugLogger } from '../ai/runner/debug-logger.js'
 import type { IStoreFactory, SessionInfo } from '../infrastructure/storage/store-factory.js'
 import type { IStateStore, IEventStore, ILoreStore, ILongTermMemoryStore, ISessionStore } from '../infrastructure/storage/interfaces.js'
 import { MainPipeline, PipelineExecutionError, createPipelineContext } from '../orchestration/pipeline/index.js'
-import type { NarrativeOutput } from '../orchestration/pipeline/types.js'
+import type { NarrativeOutput, GameplayOptions } from '../orchestration/pipeline/types.js'
+import { DEFAULT_GAMEPLAY_OPTIONS } from '../orchestration/pipeline/types.js'
 import { InitializationAgent } from '../domain/services/initialization-agent.js'
 import { SaveLoadSystem } from '../domain/services/save-load-system.js'
 import { ExtensionConfigLoader, STYLE_PRESETS, type StyleConfig } from '../domain/services/extension-config.js'
@@ -97,6 +98,16 @@ export interface GameEventListener {
   onDebugTurnStart?(turn: number, input: string): void
   onDebugStep?(step: string, phase: 'start' | 'end', status?: string, duration_ms?: number, data?: string): void
   onDebugState?(states: Record<string, unknown>): void
+  onDebugError?(errorContext: DebugErrorContext): void
+}
+
+export interface DebugErrorContext {
+  turn: number
+  input: string
+  error: string
+  step?: string
+  context_data?: Record<string, unknown>
+  timestamp: number
 }
 
 // ============================================================
@@ -123,6 +134,7 @@ export class GameLoop {
   private configLoader: ExtensionConfigLoader
   private saveLoadSystem: SaveLoadSystem
 
+  private gameplayOptions: GameplayOptions = { ...DEFAULT_GAMEPLAY_OPTIONS }
   private gameState: GameState | null = null
   private listener: GameEventListener | null = null
   private insistenceState: InsistenceState = 'NORMAL'
@@ -180,6 +192,14 @@ export class GameLoop {
   /** Hot-swap the LLM provider at runtime */
   setProvider(provider: ILLMProvider): void {
     this.agentRunner.setProvider(provider)
+  }
+
+  getGameplayOptions(): GameplayOptions {
+    return { ...this.gameplayOptions }
+  }
+
+  setGameplayOptions(opts: Partial<GameplayOptions>): void {
+    Object.assign(this.gameplayOptions, opts)
   }
 
   async initialize(): Promise<void> {
@@ -395,12 +415,15 @@ export class GameLoop {
       this.gameState.sessionId,
       this.gameState.playerCharacterId,
       this.gameState.currentTurn,
+      this.gameplayOptions,
     )
 
     // Inject predetermined check from choice selection (bypasses check_dm LLM call)
     if (options?.predeterminedCheck) {
       context.data.set('predetermined_check', options.predeterminedCheck)
     }
+
+    let lastStepName: string | undefined
 
     // Emit debug turn start
     this.listener?.onDebugTurnStart?.(this.gameState.currentTurn, playerInput)
@@ -442,9 +465,11 @@ export class GameLoop {
           // Drain any pending usage/calls so we only capture this step's calls
           runner.drainUsage()
           runner.drainCalls()
+          lastStepName = step_name
           listener?.onDebugStep?.(step_name, 'start')
         },
-        after(step_name, result, _ctx, duration_ms) {
+        after(step_name, result, ctx, duration_ms) {
+          lastStepName = step_name
           const status = result.status
           // Collect token usage for LLM calls made during this step
           const stepUsage = runner.drainUsage()
@@ -487,13 +512,26 @@ export class GameLoop {
                   : c.response,
               }))
             }
+            // Snapshot pipeline context.data after this step
+            const contextSnapshot: Record<string, unknown> = {}
+            for (const [k, v] of ctx.data.entries()) {
+              try {
+                // Only include serializable values, skip functions
+                if (typeof v !== 'function') {
+                  contextSnapshot[k] = v
+                }
+              } catch { /* skip unserializable */ }
+            }
+            if (Object.keys(contextSnapshot).length > 0) {
+              payload.context_data = contextSnapshot
+            }
             data = JSON.stringify(payload, null, 2)
           } catch {
             data = '[unserializable]'
           }
-          // Truncate very large data to avoid flooding the WS
-          if (data && data.length > 20000) {
-            data = data.slice(0, 20000) + '\n... [truncated]'
+          // Truncate very large data to avoid flooding
+          if (data && data.length > 30000) {
+            data = data.slice(0, 30000) + '\n... [truncated]'
           }
           listener?.onDebugStep?.(step_name, 'end', status, Math.round(duration_ms * 100) / 100, data)
         },
@@ -534,7 +572,9 @@ export class GameLoop {
           // Send choices if available
           const rawChoices = context.data.get('raw_choices') as ChoiceOption[] | undefined
           if (rawChoices && rawChoices.length > 0 && playerAttrs) {
-            const enriched = this.enrichChoices(rawChoices, playerAttrs as PlayerAttrs)
+            const enriched = this.gameplayOptions.action_arbiter
+              ? this.enrichChoices(rawChoices, playerAttrs as PlayerAttrs)
+              : rawChoices.map((c) => ({ text: c.text }))
             this.listener?.onChoices?.(enriched)
           }
         }
@@ -589,6 +629,19 @@ export class GameLoop {
         `处理失败: ${err instanceof Error ? err.message : String(err)}`,
         retryable,
       )
+      // Emit debug error context for error replay
+      const contextSnapshot: Record<string, unknown> = {}
+      for (const [k, v] of context.data.entries()) {
+        try { if (typeof v !== 'function') contextSnapshot[k] = v } catch { /* skip */ }
+      }
+      this.listener?.onDebugError?.({
+        turn: this.gameState?.currentTurn ?? 0,
+        input: playerInput,
+        error: err instanceof Error ? err.stack ?? err.message : String(err),
+        step: lastStepName,
+        context_data: contextSnapshot,
+        timestamp: Date.now(),
+      })
     }
   }
 
@@ -625,6 +678,16 @@ export class GameLoop {
       subjective_memory: subjectiveMemory,
       objective_state: objectiveState,
     }
+  }
+
+  /** Debug: list all keys in the state store */
+  async debugListStoreKeys(prefix = ''): Promise<string[]> {
+    return this.stateStore.listByPrefix(prefix)
+  }
+
+  /** Debug: get a value from the state store */
+  async debugGetStoreValue(key: string): Promise<unknown> {
+    return this.stateStore.get(key)
   }
 
   async save(): Promise<string> {

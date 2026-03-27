@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ClientMessage, CharacterInfo, ChoiceForClient } from '../types/protocol'
+import type { ClientMessage, CharacterInfo, ChoiceForClient, GameplayOptions } from '../types/protocol'
 
 export interface NarrativeLine {
   text: string
@@ -53,6 +53,15 @@ export interface DebugTurn {
   states: Record<string, unknown> | null
 }
 
+export interface DebugErrorEntry {
+  turn: number
+  input: string
+  error: string
+  step?: string
+  context_data?: Record<string, unknown>
+  timestamp: number
+}
+
 interface GameState {
   // Connection
   connectionStatus: 'disconnected' | 'connecting' | 'connected'
@@ -95,9 +104,13 @@ interface GameState {
   llmTestResult: { success: boolean; message: string } | null
   llmModels: string[] | null
 
+  // Gameplay Options
+  gameplayOptions: GameplayOptions
+
   // Debug
   debugInitLog: Array<{ message: string; timestamp: number }>
   debugTurns: DebugTurn[]
+  debugErrors: DebugErrorEntry[]
 
   // Actions
   setConnectionStatus: (s: GameState['connectionStatus']) => void
@@ -119,11 +132,13 @@ interface GameState {
   setSettingsOpen: (v: boolean) => void
   setLLMTestResult: (r: { success: boolean; message: string } | null) => void
   setLLMModels: (models: string[] | null) => void
+  setGameplayOptions: (opts: GameplayOptions) => void
   appendInitLog: (message: string) => void
   resetGame: () => void
   debugTurnStart: (turn: number, input: string) => void
   debugStepEvent: (entry: DebugStepEntry) => void
   debugSetState: (states: Record<string, unknown>) => void
+  debugAddError: (entry: DebugErrorEntry) => void
 }
 
 const noop = () => {}
@@ -160,8 +175,17 @@ export const useGameStore = create<GameState>((set) => ({
   llmTestResult: null,
   llmModels: null,
 
+  gameplayOptions: {
+    inner_voice: true,
+    insistence: true,
+    action_arbiter: true,
+    narrative_progress: true,
+    world_assertion: false,
+  },
+
   debugInitLog: [],
   debugTurns: [],
+  debugErrors: [],
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setSend: (send) => set({ send }),
@@ -187,6 +211,7 @@ export const useGameStore = create<GameState>((set) => ({
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setLLMTestResult: (llmTestResult) => set({ llmTestResult }),
   setLLMModels: (llmModels) => set({ llmModels }),
+  setGameplayOptions: (gameplayOptions) => set({ gameplayOptions }),
 
   appendInitLog: (message) =>
     set((s) => ({ debugInitLog: [...s.debugInitLog, { message, timestamp: Date.now() }] })),
@@ -210,6 +235,7 @@ export const useGameStore = create<GameState>((set) => ({
       sessionList: null,
       debugInitLog: [],
       debugTurns: [],
+      debugErrors: [],
     }),
 
   debugTurnStart: (turn, input) =>
@@ -236,4 +262,7 @@ export const useGameStore = create<GameState>((set) => ({
       }
       return { debugTurns: turns }
     }),
+
+  debugAddError: (entry) =>
+    set((s) => ({ debugErrors: [...s.debugErrors, entry] })),
 }))

@@ -8,6 +8,14 @@ export interface ChoiceForClient {
   }
 }
 
+export interface GameplayOptions {
+  inner_voice: boolean
+  insistence: boolean
+  action_arbiter: boolean
+  narrative_progress: boolean
+  world_assertion: boolean
+}
+
 export type ClientMessage =
   | { type: 'initialize' }
   | { type: 'new_game' }
@@ -32,6 +40,8 @@ export type ClientMessage =
   | { type: 'set_llm_config'; provider: string; api_key: string; model: string; base_url?: string }
   | { type: 'test_llm_config'; provider: string; api_key: string; model: string; base_url?: string }
   | { type: 'list_models'; provider: string; api_key: string; base_url?: string }
+  | { type: 'get_gameplay_options' }
+  | { type: 'set_gameplay_options'; options: Partial<GameplayOptions> }
 
 export type ServerMessage =
   | { type: 'narrative'; text: string; source: string }

@@ -154,6 +154,13 @@ export class ActionArbiterStep implements IPipelineStep<AtomicAction, AtomicActi
   }
 
   async execute(input: AtomicAction, context: PipelineContext): Promise<StepResult<AtomicAction>> {
+    // When action arbiter is disabled, auto-pass everything with no checks
+    if (!context.options.action_arbiter) {
+      context.data.set('drift_flag', false)
+      context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
+      return { status: 'continue', data: input }
+    }
+
     const attrs = context.data.get('player_attributes') as PlayerAttributes | undefined
 
     // If a choice with a predetermined check was selected, skip the full LLM arbiter
