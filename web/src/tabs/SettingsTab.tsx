@@ -4,6 +4,22 @@ import { registerTab } from './registry'
 import { PROVIDERS, type ProviderFields, emptyFields, getModelPlaceholder } from '../shared/provider-defs'
 import './SettingsTab.css'
 
+const FONT_SCALE_OPTIONS = [
+  { value: 0.85, label: '较小' },
+  { value: 0.9, label: '小' },
+  { value: 1, label: '默认' },
+  { value: 1.1, label: '大' },
+  { value: 1.2, label: '较大' },
+  { value: 1.35, label: '很大' },
+]
+
+function applyFontScale(scale: number) {
+  document.documentElement.style.setProperty('--ui-zoom', String(scale))
+  const root = document.getElementById('root')
+  if (root) root.style.zoom = String(scale)
+  localStorage.setItem('lorecraft:font-scale', String(scale))
+}
+
 const GAMEPLAY_TOGGLES: Array<{ key: keyof import('../types/protocol').GameplayOptions; label: string; desc: string; invert?: boolean }> = [
   { key: 'inner_voice', label: '内心声音', desc: '属性人格会对你的行动发表看法' },
   { key: 'insistence', label: '坚持机制', desc: '内心声音可以阻止你的行动，需要坚持才能执行' },
@@ -19,6 +35,13 @@ function SettingsTab() {
   const isProcessing = useGameStore((s) => s.isProcessing)
   const send = useGameStore((s) => s.send)
   const gameplayOptions = useGameStore((s) => s.gameplayOptions)
+  const debugEnabled = useGameStore((s) => s.debugEnabled)
+  const setDebugEnabled = useGameStore((s) => s.setDebugEnabled)
+
+  const [fontScale, setFontScale] = useState(() => {
+    const saved = localStorage.getItem('lorecraft:font-scale')
+    return saved ? parseFloat(saved) : 1
+  })
 
   const [provider, setProvider] = useState('gemini')
   const fieldsRef = useRef<Record<string, ProviderFields>>({})
@@ -170,6 +193,36 @@ function SettingsTab() {
             {testResult.success ? '连接成功' : `连接失败: ${testResult.message}`}
           </div>
         )}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">显示</div>
+        <div className="settings-field">
+          <span className="settings-field-label">界面缩放</span>
+          <div className="font-scale-row">
+            {FONT_SCALE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                className={`font-scale-btn ${fontScale === opt.value ? 'active' : ''}`}
+                onClick={() => { setFontScale(opt.value); applyFontScale(opt.value) }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="gameplay-toggle">
+            <div className="gameplay-toggle-text">
+              <span className="gameplay-toggle-label">调试面板</span>
+              <span className="gameplay-toggle-desc">显示管线、LLM日志、状态浏览等开发调试工具</span>
+            </div>
+            <input
+              type="checkbox"
+              className="gameplay-toggle-input"
+              checked={debugEnabled}
+              onChange={(e) => setDebugEnabled(e.target.checked)}
+            />
+          </label>
       </div>
 
       <div className="settings-section">

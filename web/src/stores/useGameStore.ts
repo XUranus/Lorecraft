@@ -108,6 +108,7 @@ interface GameState {
   gameplayOptions: GameplayOptions
 
   // Debug
+  debugEnabled: boolean
   debugInitLog: Array<{ message: string; timestamp: number }>
   debugTurns: DebugTurn[]
   debugErrors: DebugErrorEntry[]
@@ -135,6 +136,7 @@ interface GameState {
   setGameplayOptions: (opts: GameplayOptions) => void
   appendInitLog: (message: string) => void
   resetGame: () => void
+  setDebugEnabled: (v: boolean) => void
   debugTurnStart: (turn: number, input: string) => void
   debugStepEvent: (entry: DebugStepEntry) => void
   debugSetState: (states: Record<string, unknown>) => void
@@ -183,6 +185,7 @@ export const useGameStore = create<GameState>((set) => ({
     world_assertion: false,
   },
 
+  debugEnabled: localStorage.getItem('lorecraft:debug') === 'true',
   debugInitLog: [],
   debugTurns: [],
   debugErrors: [],
@@ -237,6 +240,11 @@ export const useGameStore = create<GameState>((set) => ({
       debugTurns: [],
       debugErrors: [],
     }),
+
+  setDebugEnabled: (debugEnabled) => {
+    localStorage.setItem('lorecraft:debug', String(debugEnabled))
+    set({ debugEnabled })
+  },
 
   debugTurnStart: (turn, input) =>
     set((s) => ({

@@ -24,3 +24,47 @@
   display: flex;
   overflow: hidden;
 }
+
+/* ── Desktop split layout ── */
+.desktop-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.desktop-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 300px;
+}
+
+.desktop-divider {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: var(--border);
+  position: relative;
+  transition: background var(--duration-fast);
+  touch-action: none;
+}
+
+.desktop-divider:hover,
+.desktop-divider:active {
+  background: var(--border-accent);
+}
+
+/* Wider hit area */
+.desktop-divider::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.desktop-right {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

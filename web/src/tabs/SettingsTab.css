@@ -188,6 +188,39 @@
   opacity: 0.7;
 }
 
+/* ── Font Scale ── */
+.font-scale-row {
+  display: flex;
+  gap: 4px;
+}
+
+.font-scale-btn {
+  flex: 1;
+  padding: 7px 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  white-space: nowrap;
+}
+
+.font-scale-btn:hover {
+  border-color: var(--border-accent);
+  color: var(--fg);
+}
+
+.font-scale-btn.active {
+  border-color: var(--border-accent);
+  background: rgba(196, 149, 106, 0.08);
+  color: var(--title);
+  font-weight: 600;
+}
+
 /* ── Gameplay Toggles ── */
 .gameplay-toggles {
   display: flex;

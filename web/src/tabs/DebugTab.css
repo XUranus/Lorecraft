@@ -17,9 +17,9 @@
 }
 
 .debug-toolbar-btn {
-  padding: 4px 12px;
+  padding: 5px 14px;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   background: none;
   border: 1px solid transparent;
@@ -46,7 +46,7 @@
 .debug-error-badge {
   background: var(--error);
   color: var(--bg);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 8px;
@@ -73,9 +73,9 @@
 /* ── Filter input ── */
 .debug-filter-input {
   flex: 1;
-  padding: 5px 10px;
+  padding: 6px 10px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -104,7 +104,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 12px;
+  padding: 8px 12px;
   background: var(--bg-elevated);
   cursor: pointer;
   user-select: none;
@@ -117,7 +117,7 @@
 
 .debug-chevron {
   color: var(--fg-muted);
-  font-size: 9px;
+  font-size: 10px;
   width: 12px;
   flex-shrink: 0;
 }
@@ -126,14 +126,14 @@
   color: var(--title);
   font-family: var(--font-ui);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
 .debug-turn-input {
   color: var(--fg);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 13px;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -143,29 +143,29 @@
 .debug-turn-count {
   color: var(--fg-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .debug-turn-tokens {
   color: var(--voice);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .debug-turn-duration {
   color: var(--system);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .debug-turn-running {
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 3px;
   background: rgba(200, 160, 60, 0.12);
   color: var(--warn);
@@ -202,7 +202,7 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 4px 12px 4px 26px;
+  padding: 5px 12px 5px 26px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -211,7 +211,7 @@
 .debug-init-time {
   color: var(--fg-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   min-width: 48px;
   text-align: right;
   flex-shrink: 0;
@@ -220,7 +220,7 @@
 .debug-init-msg {
   color: var(--fg);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 13px;
   word-break: break-all;
 }
 
@@ -235,7 +235,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px 5px 26px;
+  padding: 6px 12px 6px 26px;
   cursor: pointer;
   user-select: none;
   transition: background var(--duration-fast);
@@ -246,8 +246,8 @@
 }
 
 .debug-status-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -260,33 +260,33 @@
 .debug-step-name {
   color: var(--fg);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   flex: 1;
 }
 
 .debug-step-time {
   color: var(--fg-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .debug-step-tokens {
   color: var(--voice);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .debug-step-spinner {
   color: var(--warn);
   animation: spin 1s linear infinite;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .debug-step-tag {
   font-family: var(--font-ui);
-  font-size: 9px;
-  padding: 1px 6px;
+  font-size: 11px;
+  padding: 2px 7px;
   border-radius: 3px;
   font-weight: 600;
   letter-spacing: 0.3px;
@@ -315,7 +315,7 @@
 .debug-expand-hint {
   color: var(--fg-muted);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 /* ── Step body & data ── */
@@ -329,8 +329,8 @@
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.55;
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
@@ -352,7 +352,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px 5px 32px;
+  padding: 6px 12px 6px 32px;
   cursor: pointer;
   user-select: none;
   transition: background var(--duration-fast);
@@ -365,7 +365,7 @@
 .debug-context-label {
   color: #6aaa8c;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -383,10 +383,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 12px 3px 44px;
+  padding: 4px 12px 4px 44px;
   cursor: pointer;
   user-select: none;
-  font-size: 11px;
+  font-size: 12px;
   transition: background var(--duration-fast);
 }
 
@@ -397,7 +397,7 @@
 .debug-ctx-key {
   color: #6aaa8c;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -405,7 +405,7 @@
 .debug-ctx-preview {
   color: var(--fg-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -414,7 +414,7 @@
 
 .debug-ctx-expand {
   color: var(--fg-muted);
-  font-size: 9px;
+  font-size: 10px;
   flex-shrink: 0;
 }
 
@@ -422,7 +422,7 @@
   margin: 0;
   padding: 4px 12px 6px 56px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--fg);
   white-space: pre-wrap;
@@ -447,14 +447,14 @@
   gap: 8px;
   padding: 6px 12px;
   background: rgba(140, 110, 190, 0.04);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .llm-call-badge {
   background: rgba(140, 110, 190, 0.15);
   color: #a088c8;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 3px;
@@ -463,20 +463,20 @@
 .llm-call-agent {
   color: var(--fg);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   flex: 1;
 }
 
 .llm-call-time {
   color: var(--fg-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .llm-call-usage {
   color: var(--voice);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .llm-call-actions {
@@ -487,9 +487,9 @@
 }
 
 .llm-call-toggle {
-  padding: 3px 9px;
+  padding: 4px 10px;
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -526,7 +526,7 @@
 .llm-msg-role {
   padding: 4px 12px;
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -540,8 +540,8 @@
   margin: 0;
   padding: 4px 12px 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--fg);
   white-space: pre-wrap;
   word-break: break-all;
@@ -557,7 +557,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 12px;
+  padding: 8px 12px;
   background: var(--bg-elevated);
   cursor: pointer;
   user-select: none;
@@ -571,7 +571,7 @@
 .debug-state-label {
   color: var(--system);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -587,10 +587,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px 5px 26px;
+  padding: 6px 12px 6px 26px;
   color: var(--fg);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   user-select: none;
   transition: background var(--duration-fast);
@@ -606,8 +606,8 @@
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.55;
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
@@ -633,7 +633,7 @@
 
 .debug-llm-stat {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--fg-muted);
 }
 
@@ -654,14 +654,14 @@
 
 .debug-llm-entry-turn {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--title);
   font-weight: 600;
 }
 
 .debug-llm-entry-step {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-muted);
 }
 
@@ -684,9 +684,9 @@
 }
 
 .debug-store-refresh {
-  padding: 4px 12px;
+  padding: 5px 14px;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 13px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -718,7 +718,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
+  padding: 6px 10px;
   background: var(--bg-elevated);
   cursor: pointer;
   user-select: none;
@@ -727,7 +727,7 @@
 
 .debug-store-group-name {
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--title);
   flex: 1;
@@ -735,7 +735,7 @@
 
 .debug-store-group-count {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   color: var(--fg-muted);
   padding: 1px 5px;
   background: rgba(255, 255, 255, 0.04);
@@ -743,9 +743,9 @@
 }
 
 .debug-store-key-item {
-  padding: 3px 10px 3px 24px;
+  padding: 4px 10px 4px 24px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-muted);
   cursor: pointer;
   overflow: hidden;
@@ -776,7 +776,7 @@
 .debug-store-value-key {
   padding: 6px 12px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--title);
   background: var(--bg-elevated);
@@ -788,8 +788,8 @@
   margin: 0;
   padding: 10px 14px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--fg);
   white-space: pre-wrap;
   word-break: break-all;
@@ -813,7 +813,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 12px;
+  padding: 8px 12px;
   background: rgba(184, 74, 74, 0.04);
   cursor: pointer;
   user-select: none;
@@ -825,14 +825,14 @@
 
 .debug-error-time {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-muted);
   flex-shrink: 0;
 }
 
 .debug-error-turn {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--error);
   flex-shrink: 0;
@@ -840,9 +840,9 @@
 
 .debug-error-step {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-muted);
-  padding: 1px 6px;
+  padding: 2px 7px;
   background: rgba(184, 74, 74, 0.1);
   border-radius: 3px;
   flex-shrink: 0;
@@ -850,7 +850,7 @@
 
 .debug-error-msg {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--fg);
   flex: 1;
   overflow: hidden;
@@ -871,7 +871,7 @@
 
 .debug-error-section-title {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -883,8 +883,8 @@
   margin: 0;
   padding: 6px 10px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--fg);
   background: rgba(0, 0, 0, 0.15);
   border-radius: 3px;
@@ -900,9 +900,9 @@
 
 .debug-error-copy {
   margin-top: 8px;
-  padding: 5px 14px;
+  padding: 6px 16px;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   background: var(--bg-elevated);
   border: 1px solid rgba(184, 74, 74, 0.2);
@@ -936,8 +936,8 @@
   }
 
   .debug-toolbar-btn {
-    font-size: 10px;
-    padding: 3px 8px;
+    font-size: 12px;
+    padding: 4px 10px;
     white-space: nowrap;
   }
 
