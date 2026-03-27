@@ -1,28 +1,159 @@
 .narrative-tab {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 20px;
+  padding: var(--space-lg) var(--space-xl);
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .narrative-line {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   word-break: break-word;
+  line-height: 1.75;
+  animation: fadeIn 0.3s ease-out;
 }
 
-.narrative-line.spacer { height: 8px; }
-.narrative-line.event { color: var(--narrative); }
-.narrative-line.player-input { color: var(--highlight); font-weight: bold; }
-.narrative-line.rejection { color: var(--status); }
-.narrative-line.inciting { color: var(--title); font-weight: bold; }
-.narrative-line.error { color: var(--error); font-weight: bold; }
-.narrative-line.system { color: var(--system); }
-.narrative-line.info { color: var(--status); }
-.narrative-line.world-bg { color: var(--status); }
-.narrative-line.world-title { color: var(--title); font-weight: bold; font-size: 17px; }
-.narrative-line.player-intro { color: var(--system); }
-.narrative-line.separator { color: var(--title); font-weight: bold; }
-.narrative-line.voice { color: var(--voice); font-style: italic; padding-left: 12px; border-left: 2px solid var(--voice); }
-.narrative-line.dialogue { color: var(--highlight); padding-left: 16px; }
-.narrative-line.sound { color: var(--status); font-style: italic; text-align: center; }
-.narrative-line.check-pass { color: var(--system); font-weight: bold; padding: 4px 8px; background: rgba(96, 160, 96, 0.1); border-radius: 3px; }
-.narrative-line.check-fail { color: var(--error); font-weight: bold; padding: 4px 8px; background: rgba(208, 64, 64, 0.1); border-radius: 3px; }
+/* ── Spacer ── */
+.narrative-line.spacer { height: 12px; }
+
+/* ── Event / main narrative ── */
+.narrative-line.event {
+  color: var(--narrative);
+  font-family: var(--font-narrative);
+  font-size: 15px;
+}
+
+/* ── Player input ── */
+.narrative-line.player-input {
+  color: var(--highlight);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 4px 0;
+  margin: 4px 0;
+}
+
+/* ── Rejection ── */
+.narrative-line.rejection {
+  color: var(--fg-muted);
+  font-family: var(--font-narrative);
+  font-style: italic;
+}
+
+/* ── Inciting moment ── */
+.narrative-line.inciting {
+  color: var(--title);
+  font-family: var(--font-narrative);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+/* ── Error ── */
+.narrative-line.error {
+  color: var(--error);
+  font-weight: 600;
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+/* ── System messages ── */
+.narrative-line.system {
+  color: var(--system);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.narrative-line.info {
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+/* ── World building ── */
+.narrative-line.world-bg {
+  color: var(--fg-muted);
+  font-family: var(--font-narrative);
+  font-style: italic;
+  font-size: 14px;
+}
+
+.narrative-line.world-title {
+  color: var(--title);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 1px;
+  margin: 8px 0;
+}
+
+.narrative-line.player-intro {
+  color: var(--system);
+  font-family: var(--font-narrative);
+  font-size: 14px;
+}
+
+/* ── Separator ── */
+.narrative-line.separator {
+  color: var(--title-dim);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-align: center;
+  padding: 8px 0;
+}
+
+/* ── Inner voice ── */
+.narrative-line.voice {
+  color: var(--voice);
+  font-family: var(--font-narrative);
+  font-style: italic;
+  padding-left: 16px;
+  border-left: 2px solid rgba(112, 144, 184, 0.3);
+  margin: 4px 0;
+}
+
+/* ── Dialogue ── */
+.narrative-line.dialogue {
+  color: var(--highlight);
+  font-family: var(--font-narrative);
+  padding-left: 20px;
+  font-size: 15px;
+}
+
+/* ── Sound effects ── */
+.narrative-line.sound {
+  color: var(--fg-muted);
+  font-family: var(--font-narrative);
+  font-style: italic;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+/* ── Skill checks ── */
+.narrative-line.check-pass {
+  color: var(--system);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 5px 10px;
+  background: rgba(90, 154, 106, 0.08);
+  border: 1px solid rgba(90, 154, 106, 0.15);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+.narrative-line.check-fail {
+  color: var(--error);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 5px 10px;
+  background: rgba(184, 74, 74, 0.08);
+  border: 1px solid rgba(184, 74, 74, 0.15);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}

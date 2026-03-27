@@ -26,9 +26,20 @@ export type StepResult<T> =
   | { status: 'short_circuit'; output: NarrativeOutput }
   | { status: 'error'; error: PipelineError }
 
+export interface NarrativeChoice {
+  text: string
+  check?: {
+    attribute_id: string
+    attribute_display_name: string
+    difficulty: string
+    pass_chance: number  // 0-100
+  }
+}
+
 export interface NarrativeOutput {
   text: string
   source: 'event' | 'rejection' | 'reflection'
+  choices?: NarrativeChoice[]
 }
 
 export interface PipelineError {

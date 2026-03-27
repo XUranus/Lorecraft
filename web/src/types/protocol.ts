@@ -1,7 +1,18 @@
+export interface ChoiceForClient {
+  text: string
+  check?: {
+    attribute_id: string
+    attribute_display_name: string
+    difficulty: string
+    pass_chance: number
+  }
+}
+
 export type ClientMessage =
   | { type: 'initialize' }
   | { type: 'new_game' }
   | { type: 'input'; text: string }
+  | { type: 'select_choice'; index: number }
   | { type: 'save' }
   | { type: 'ping' }
   | { type: 'reroll_attributes' }

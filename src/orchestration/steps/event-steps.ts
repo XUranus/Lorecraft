@@ -8,11 +8,12 @@ import type {
 import type { CharacterKnowledge } from '../../domain/models/character.js'
 import type { Event } from '../../domain/models/event.js'
 import type { SignalProcessor } from '../../domain/services/signal-processor.js'
-import { EventGeneratorOutputSchema, SignalBOutputSchema, PacingCheckOutputSchema } from '../../domain/models/pipeline-io.js'
+import { EventGeneratorOutputSchema, SignalBOutputSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
 import { prompts } from '../../ai/prompt/prompts.js'
 import { z } from 'zod/v4'
 import { uuid } from '../../utils/uuid.js'
+import type { BeatPlan } from './arbitration-steps.js'
 
 // ============================================================
 // Intermediate type for event data flowing through the pipeline
@@ -24,125 +25,42 @@ export interface EventPipelineData {
   arbitration: ArbitrationResult
 }
 
-export interface BeatPlan {
-  beats: Array<{ description: string; purpose: string }>
-  current_beat_index: number
-  created_at_turn: number
-}
-
 // ============================================================
-// Step 1: EventContextStep — assemble context for generation
+// PacingStep — rule-based pacing decision (no LLM)
+// (replaces PacingCheckStep)
 // ============================================================
 
-export class EventContextStep implements IPipelineStep<ArbitrationResult, ArbitrationResult> {
-  readonly name = 'EventContextStep'
-  private readonly stateStore: IStateStore
-  private readonly eventStore: IEventStore
+const QUICK_ACTION_TYPES = new Set([
+  'MOVE_TO', 'MOVE', 'EXAMINE', 'OBSERVE', 'LOOK', 'CHECK', 'INVENTORY', 'WAIT',
+])
 
-  constructor(stateStore: IStateStore, eventStore: IEventStore) {
-    this.stateStore = stateStore
-    this.eventStore = eventStore
-  }
+export class PacingStep implements IPipelineStep<ArbitrationResult, ArbitrationResult> {
+  readonly name = 'PacingStep'
 
   async execute(
     input: ArbitrationResult,
     context: PipelineContext,
   ): Promise<StepResult<ArbitrationResult>> {
-    const characterId = context.player_character_id
+    const actionType = input.action.type.toUpperCase()
+    const recentWeights = context.data.get('recent_event_weights') as string[] | undefined
 
-    const [worldState, participantStates, subjectiveMemory, worldTone, phaseIndex, phases, beatPlan] = await Promise.all([
-      this.stateStore.get<string>(`world:summary:${characterId}`),
-      this.stateStore.get<Array<{ npc_id: string; state_summary: string }>>(
-        `participants:states:${characterId}`,
-      ),
-      this.stateStore.get<{
-        recent_narrative: string[]
-        known_facts: string[]
-        known_characters: string[]
-      }>(`memory:subjective:${characterId}`),
-      this.stateStore.get<string>('world:tone'),
-      this.stateStore.get<number>('narrative:current_phase_index'),
-      this.stateStore.get<Array<{ phase_id: string; description: string; direction_summary: string }>>('narrative:phases'),
-      this.stateStore.get<BeatPlan>('narrative:beat_plan'),
-    ])
-
-    context.data.set('event_world_state', worldState ?? 'No world state available.')
-    context.data.set('event_participant_states', participantStates ?? [])
-    context.data.set('event_recent_narrative', subjectiveMemory?.recent_narrative?.slice(-5) ?? [])
-    context.data.set('event_known_facts', subjectiveMemory?.known_facts?.slice(-10) ?? [])
-    context.data.set('world_tone', worldTone ?? '')
-
-    // Narrative phase direction
-    if (phases && phases.length > 0) {
-      const idx = Math.min(phaseIndex ?? 0, phases.length - 1)
-      context.data.set('narrative_phase', phases[idx])
-      context.data.set('narrative_phase_index', idx)
-      context.data.set('narrative_phase_total', phases.length)
+    // Rule 1: Routine actions are quick
+    if (QUICK_ACTION_TYPES.has(actionType)) {
+      context.data.set('pacing', { pacing: 'QUICK', max_chars: 100, reasoning: 'routine_action' })
+      return { status: 'continue', data: input }
     }
 
-    // Beat plan (short-term scene guidance)
-    if (beatPlan) {
-      context.data.set('beat_plan', beatPlan)
-    }
-
-    // Recent event weights for pacing awareness
-    const allEvents = await this.eventStore.getAllTier1()
-    const recentWeights = allEvents.slice(-5).map((e) => e.weight)
-    context.data.set('recent_event_weights', recentWeights)
-
-    return { status: 'continue', data: input }
-  }
-}
-
-// ============================================================
-// Step 1b: PacingCheckStep — determine narrative length guidance
-// ============================================================
-
-export class PacingCheckStep implements IPipelineStep<ArbitrationResult, ArbitrationResult> {
-  readonly name = 'PacingCheckStep'
-  private readonly agentRunner: AgentRunner
-  private readonly parser = new ResponseParser(PacingCheckOutputSchema)
-
-  constructor(agentRunner: AgentRunner) {
-    this.agentRunner = agentRunner
-  }
-
-  async execute(
-    input: ArbitrationResult,
-    context: PipelineContext,
-  ): Promise<StepResult<ArbitrationResult>> {
-    const systemPrompt = prompts.get('pacing_judge')
-
-    const recentNarrative = context.data.get('recent_context') as {
-      recent_narrative?: string[]
-    } | undefined
-
-    const userMessage = JSON.stringify({
-      action: input.action,
-      recent_narrative: recentNarrative?.recent_narrative?.slice(-3) ?? [],
-    })
-
-    try {
-      const response = await this.agentRunner.run(
-        [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        { agent_type: 'PacingJudge' },
-      )
-
-      const result = this.parser.parse(response.content)
-      if (result.success) {
-        context.data.set('pacing', result.data)
-      } else {
-        // Default to narrative if parse fails
-        context.data.set('pacing', { pacing: 'NARRATIVE', max_chars: null, reasoning: 'parse_fallback' })
+    // Rule 2: After sustained high tension, force a breather (still narrative but flagged)
+    if (recentWeights && recentWeights.length >= 3) {
+      const highCount = recentWeights.filter((w) => w === 'MAJOR' || w === 'SIGNIFICANT').length
+      if (highCount >= 3) {
+        context.data.set('pacing', { pacing: 'NARRATIVE', max_chars: null, reasoning: 'tension_breather' })
+        return { status: 'continue', data: input }
       }
-    } catch {
-      // Non-critical; default to narrative
-      context.data.set('pacing', { pacing: 'NARRATIVE', max_chars: null, reasoning: 'error_fallback' })
     }
 
+    // Default: narrative
+    context.data.set('pacing', { pacing: 'NARRATIVE', max_chars: null, reasoning: 'default' })
     return { status: 'continue', data: input }
   }
 }
@@ -838,6 +756,12 @@ export class EventBroadcastStep implements IPipelineStep<EventPipelineData, Narr
     // Phase 4: will publish event.tier1 to EventBus here
     context.data.set('event_broadcast_pending', true)
     context.data.set('final_event_id', input.event_id)
+
+    // Pass choices through for the game loop to enrich with pass_chance
+    const rawChoices = input.generator_output.choices
+    if (rawChoices && rawChoices.length > 0) {
+      context.data.set('raw_choices', rawChoices)
+    }
 
     const output: NarrativeOutput = {
       text: input.generator_output.narrative_text,

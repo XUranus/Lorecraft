@@ -14,7 +14,6 @@ import { SignalProcessor } from '../domain/services/signal-processor.js'
 import {
   ValidationStep,
   InputParserStep,
-  AmbiguityResolverStep,
   ActionValidationStep,
   ToneSignalStep,
 } from './steps/input-steps.js'
@@ -24,23 +23,21 @@ import {
   ActiveTraitStep,
   InjectionReadStep,
   ShouldSpeakStep,
-  VoiceGenerationStep,
-  DebateStep,
+  VoiceDebateStep,
   InsistenceStep,
   VoiceWriteStep,
 } from './steps/reflection-steps.js'
 
 // Arbitration steps
 import {
-  ParallelQueryStep,
-  FeasibilityCheckStep,
+  FullContextStep,
+  ActionArbiterStep,
   ArbitrationResultStep,
 } from './steps/arbitration-steps.js'
 
 // Event steps
 import {
-  EventContextStep,
-  PacingCheckStep,
+  PacingStep,
   EventGeneratorStep,
   EventSchemaValidationStep,
   EventIdStep,
@@ -195,10 +192,6 @@ class MockLLMProvider implements ILLMProvider {
     response: string
   }> = []
 
-  /**
-   * Register a handler: if the matcher returns true for the system+user messages,
-   * return the given JSON string as the LLM response content.
-   */
   onMatch(
     matcher: (system: string, user: string) => boolean,
     response: string,
@@ -212,11 +205,8 @@ class MockLLMProvider implements ILLMProvider {
 
     let agent_type = 'unknown'
     if (system.includes('InputParser')) agent_type = 'InputParser'
-    else if (system.includes('AmbiguityResolver')) agent_type = 'AmbiguityResolver'
-    else if (system.includes('TraitVoiceGenerator')) agent_type = 'TraitVoiceGenerator'
-    else if (system.includes('DebateGenerator')) agent_type = 'DebateGenerator'
-    else if (system.includes('FeasibilityJudge')) agent_type = 'FeasibilityJudge'
-    else if (system.includes('pacing judge')) agent_type = 'PacingJudge'
+    else if (system.includes('ActionArbiter')) agent_type = 'ActionArbiter'
+    else if (system.includes('VoiceDebateGenerator')) agent_type = 'VoiceDebateGenerator'
     else if (system.includes('EventGenerator')) agent_type = 'EventGenerator'
     else if (system.includes('SignalBTagger')) agent_type = 'SignalBTagger'
 
@@ -251,9 +241,6 @@ class MockLLMProvider implements ILLMProvider {
 // Test helpers
 // ============================================================
 
-/**
- * Builds the full pipeline matching the MainPipeline step chain.
- */
 function buildPipeline(deps: {
   agentRunner: AgentRunner
   signalProcessor: SignalProcessor
@@ -268,7 +255,6 @@ function buildPipeline(deps: {
   // ── Input Pipeline ──
   pipeline.addStep(new ValidationStep())
   pipeline.addStep(new InputParserStep(agentRunner))
-  pipeline.addStep(new AmbiguityResolverStep(agentRunner))
   pipeline.addStep(new ActionValidationStep())
   pipeline.addStep(new ToneSignalStep())
 
@@ -279,25 +265,23 @@ function buildPipeline(deps: {
   )
   pipeline.addStep(new InjectionReadStep())
   pipeline.addStep(new ShouldSpeakStep())
-  pipeline.addStep(new VoiceGenerationStep(agentRunner))
-  pipeline.addStep(new DebateStep(agentRunner))
+  pipeline.addStep(new VoiceDebateStep(agentRunner))
   pipeline.addStep(new InsistenceStep())
   pipeline.addStep(new VoiceWriteStep())
 
-  // ── Arbitration Pipeline (single LLM feasibility check) ──
+  // ── Arbitration Pipeline (single LLM call for feasibility + check) ──
   pipeline.addStep(
-    new ParallelQueryStep(stateStore, loreStore, eventStore),
+    new FullContextStep(stateStore, loreStore, eventStore),
     (_prevOutput, context) => {
       const parsedIntent = context.data.get('parsed_intent') as { atomic_actions: any[] }
       return parsedIntent.atomic_actions[0]
     },
   )
-  pipeline.addStep(new FeasibilityCheckStep(agentRunner))
+  pipeline.addStep(new ActionArbiterStep(agentRunner))
   pipeline.addStep(new ArbitrationResultStep())
 
   // ── Event Pipeline ──
-  pipeline.addStep(new EventContextStep(stateStore, eventStore))
-  pipeline.addStep(new PacingCheckStep(agentRunner))
+  pipeline.addStep(new PacingStep())
   pipeline.addStep(new EventGeneratorStep(agentRunner))
   pipeline.addStep(new EventSchemaValidationStep())
   pipeline.addStep(new EventIdStep())
@@ -333,13 +317,10 @@ describe('Phase 2 Pipeline Integration', () => {
     eventStore = new InMemoryEventStore()
     loreStore = new InMemoryLoreStore()
 
-    // Set up signal processor with no active traits (all weights at 0 / SILENT)
     signalProcessor = new SignalProcessor(stateStore, [])
 
-    // Set up world state in store
     await stateStore.set('character:location:player_1', 'market')
     await stateStore.set('npc:present:chief', true)
-    // World summaries for EventContextStep
     await stateStore.set('world:summary:player_1', 'A small town with a market, police station, and mayor office.')
     await stateStore.set('participants:states:player_1', [
       { npc_id: 'chief', state_summary: 'On duty at the police station.' },
@@ -351,7 +332,6 @@ describe('Phase 2 Pipeline Integration', () => {
   // ============================================================
 
   it('Scenario A: normal flow produces narrative and writes event', async () => {
-    // InputParser response
     mockLLM.onMatch(
       (sys) => sys.includes('InputParser'),
       JSON.stringify({
@@ -365,34 +345,27 @@ describe('Phase 2 Pipeline Integration', () => {
       }),
     )
 
-    // FeasibilityJudge: all checks pass, no drift
+    // ActionArbiter: feasibility passes, no check needed
     mockLLM.onMatch(
-      (sys) => sys.includes('FeasibilityJudge'),
+      (sys) => sys.includes('ActionArbiter'),
       JSON.stringify({
         passed: true,
         checks: [
           { dimension: 'information_completeness', passed: true, reason: null },
           { dimension: 'physical_spatial', passed: true, reason: null },
-          { dimension: 'social_relationship', passed: true, reason: null },
-          { dimension: 'narrative_feasibility', passed: true, reason: null },
-          { dimension: 'narrative_drift', passed: true, reason: null },
+          { dimension: 'logical_consistency', passed: true, reason: null },
         ],
         drift_flag: false,
         rejection_narrative: null,
+        needs_check: false,
+        attribute: null,
+        difficulty: null,
+        modifiers: null,
+        check_reason: null,
       }),
     )
 
-    // PacingJudge: narrative moment
-    mockLLM.onMatch(
-      (sys) => sys.includes('pacing judge'),
-      JSON.stringify({
-        pacing: 'NARRATIVE',
-        max_chars: null,
-        reasoning: 'First visit to a new location is a narrative moment.',
-      }),
-    )
-
-    // EventGenerator: produce narrative
+    // EventGenerator
     mockLLM.onMatch(
       (sys) => sys.includes('EventGenerator'),
       JSON.stringify({
@@ -404,6 +377,10 @@ describe('Phase 2 Pipeline Integration', () => {
         narrative_text: '你走进了警察局，空气中弥漫着陈旧文件的气味。值班台后面坐着一位神情严肃的警长。',
         state_changes: [
           { target: 'player_1', field: 'location', change_description: 'Moved to police_station' },
+        ],
+        choices: [
+          { text: '走上前和警长搭话' },
+          { text: '在警察局里四处查看' },
         ],
       }),
     )
@@ -427,25 +404,20 @@ describe('Phase 2 Pipeline Integration', () => {
 
     const result = await pipeline.execute('走到警察局看看有什么人', context)
 
-    // Verify narrative output
     expect(result.text).toContain('你走进了警察局')
     expect(result.source).toBe('event')
 
-    // Verify event was written to EventStore
     expect(eventStore.events).toHaveLength(1)
     const writtenEvent = eventStore.events[0]
     expect(writtenEvent.title).toBe('前往警察局')
     expect(writtenEvent.narrative_text).toContain('你走进了警察局')
     expect(writtenEvent.weight).toBe('MINOR')
 
-    // Verify LLM calls: InputParser, FeasibilityJudge, EventGenerator
     const agentTypes = mockLLM.calls.map((c) => c.agent_type)
     expect(agentTypes).toContain('InputParser')
-    expect(agentTypes).toContain('FeasibilityJudge')
+    expect(agentTypes).toContain('ActionArbiter')
     expect(agentTypes).toContain('EventGenerator')
-    expect(agentTypes).not.toContain('TraitVoiceGenerator')
-    expect(agentTypes).not.toContain('DebateGenerator')
-    expect(agentTypes).not.toContain('AmbiguityResolver')
+    expect(agentTypes).not.toContain('VoiceDebateGenerator')
   })
 
   // ============================================================
@@ -453,7 +425,6 @@ describe('Phase 2 Pipeline Integration', () => {
   // ============================================================
 
   it('Scenario B: arbitration rejection short-circuits pipeline, no event created', async () => {
-    // InputParser: player wants to go to mayor_office
     mockLLM.onMatch(
       (sys) => sys.includes('InputParser'),
       JSON.stringify({
@@ -466,20 +437,23 @@ describe('Phase 2 Pipeline Integration', () => {
       }),
     )
 
-    // FeasibilityJudge: physical check fails — door is locked
+    // ActionArbiter: feasibility fails
     mockLLM.onMatch(
-      (sys) => sys.includes('FeasibilityJudge'),
+      (sys) => sys.includes('ActionArbiter'),
       JSON.stringify({
         passed: false,
         checks: [
           { dimension: 'information_completeness', passed: true, reason: null },
           { dimension: 'physical_spatial', passed: false, reason: '市长办公室的门上着锁，需要钥匙才能进入。' },
-          { dimension: 'social_relationship', passed: true, reason: null },
-          { dimension: 'narrative_feasibility', passed: true, reason: null },
-          { dimension: 'narrative_drift', passed: true, reason: null },
+          { dimension: 'logical_consistency', passed: true, reason: null },
         ],
         drift_flag: false,
         rejection_narrative: '市长办公室的门紧锁着，你没有钥匙无法进入。',
+        needs_check: false,
+        attribute: null,
+        difficulty: null,
+        modifiers: null,
+        check_reason: null,
       }),
     )
 
@@ -496,17 +470,14 @@ describe('Phase 2 Pipeline Integration', () => {
 
     const result = await pipeline.execute('去市长办公室', context)
 
-    // Verify rejection narrative
     expect(result.text).toContain('市长办公室的门紧锁着')
     expect(result.source).toBe('rejection')
 
-    // Verify no event was created
     expect(eventStore.events).toHaveLength(0)
 
-    // Verify pipeline short-circuited: only InputParser + FeasibilityJudge called
     const agentTypes = mockLLM.calls.map((c) => c.agent_type)
     expect(agentTypes).toContain('InputParser')
-    expect(agentTypes).toContain('FeasibilityJudge')
+    expect(agentTypes).toContain('ActionArbiter')
     expect(agentTypes).not.toContain('EventGenerator')
   })
 
@@ -515,7 +486,6 @@ describe('Phase 2 Pipeline Integration', () => {
   // ============================================================
 
   it('Scenario C: reflection passes silently with no active traits, no voice LLM call', async () => {
-    // InputParser: simple examine action
     mockLLM.onMatch(
       (sys) => sys.includes('InputParser'),
       JSON.stringify({
@@ -528,30 +498,23 @@ describe('Phase 2 Pipeline Integration', () => {
       }),
     )
 
-    // FeasibilityJudge: all pass
+    // ActionArbiter: passes, no check
     mockLLM.onMatch(
-      (sys) => sys.includes('FeasibilityJudge'),
+      (sys) => sys.includes('ActionArbiter'),
       JSON.stringify({
         passed: true,
         checks: [
           { dimension: 'information_completeness', passed: true, reason: null },
           { dimension: 'physical_spatial', passed: true, reason: null },
-          { dimension: 'social_relationship', passed: true, reason: null },
-          { dimension: 'narrative_feasibility', passed: true, reason: null },
-          { dimension: 'narrative_drift', passed: true, reason: null },
+          { dimension: 'logical_consistency', passed: true, reason: null },
         ],
         drift_flag: false,
         rejection_narrative: null,
-      }),
-    )
-
-    // PacingJudge: quick interaction
-    mockLLM.onMatch(
-      (sys) => sys.includes('pacing judge'),
-      JSON.stringify({
-        pacing: 'QUICK',
-        max_chars: 100,
-        reasoning: 'Simple observation is a routine action.',
+        needs_check: false,
+        attribute: null,
+        difficulty: null,
+        modifiers: null,
+        check_reason: null,
       }),
     )
 
@@ -566,6 +529,10 @@ describe('Phase 2 Pipeline Integration', () => {
         context: '一个普通的观察行为。',
         narrative_text: '你环顾四周，市场上的小贩们正在忙碌地招呼着客人。',
         state_changes: [],
+        choices: [
+          { text: '走到最近的小贩摊前交谈' },
+          { text: '离开市场继续往前走' },
+        ],
       }),
     )
 
@@ -582,28 +549,21 @@ describe('Phase 2 Pipeline Integration', () => {
 
     const result = await pipeline.execute('看看周围', context)
 
-    // Verify the pipeline completed and produced narrative
     expect(result.text).toContain('你环顾四周')
     expect(result.source).toBe('event')
 
-    // Verify event was written
     expect(eventStore.events).toHaveLength(1)
 
-    // Verify NO TraitVoiceGenerator or DebateGenerator calls were made
     const agentTypes = mockLLM.calls.map((c) => c.agent_type)
-    expect(agentTypes).not.toContain('TraitVoiceGenerator')
-    expect(agentTypes).not.toContain('DebateGenerator')
+    expect(agentTypes).not.toContain('VoiceDebateGenerator')
 
-    // Verify reflection_silent flag was set
     expect(context.data.get('reflection_silent')).toBe(true)
     expect(context.data.get('skip_reflection_llm')).toBe(true)
 
-    // Verify trait_voices was set to the empty default
     const traitVoices = context.data.get('trait_voices') as { voices: unknown[]; debate_needed: boolean }
     expect(traitVoices.voices).toHaveLength(0)
     expect(traitVoices.debate_needed).toBe(false)
 
-    // SignalBTagger should NOT be called since tags don't include trigger tags
     expect(agentTypes).not.toContain('SignalBTagger')
   })
 })

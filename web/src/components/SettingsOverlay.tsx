@@ -1,22 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { PROVIDERS, type ProviderFields, emptyFields, getModelPlaceholder } from '../shared/provider-defs'
 import './SettingsOverlay.css'
-
-const PROVIDERS = [
-  { value: 'openai_compatible', label: 'OpenAI 兼容 API' },
-  { value: 'gemini', label: 'Google Gemini' },
-  { value: 'openai', label: 'OpenAI 官方' },
-  { value: 'anthropic', label: 'Anthropic Claude' },
-  { value: 'xai', label: 'xAI Grok' },
-] as const
-
-interface ProviderFields {
-  apiKey: string
-  model: string
-  baseUrl: string
-}
-
-const emptyFields: ProviderFields = { apiKey: '', model: '', baseUrl: '' }
 
 export function SettingsOverlay() {
   const open = useGameStore((s) => s.settingsOpen)
@@ -26,29 +11,21 @@ export function SettingsOverlay() {
   const isProcessing = useGameStore((s) => s.isProcessing)
   const send = useGameStore((s) => s.send)
 
-  const [provider, setProvider] = useState('openai_compatible')
-  // Per-provider field storage — switching providers preserves each one's data
+  const [provider, setProvider] = useState('gemini')
   const fieldsRef = useRef<Record<string, ProviderFields>>({})
   const [fields, setFields] = useState<ProviderFields>(emptyFields)
   const [testing, setTesting] = useState(false)
   const [loadingModels, setLoadingModels] = useState(false)
   const [showKey, setShowKey] = useState(false)
-  // Track which provider the server config belongs to
-  const serverProviderRef = useRef<string>('')
 
-  // Save current fields into the per-provider map
   const stashFields = useCallback((prov: string, f: ProviderFields) => {
     fieldsRef.current[prov] = { ...f }
   }, [])
 
-  // Sync form when config loads from server
   useEffect(() => {
     if (llmConfig && llmConfig.provider) {
-      serverProviderRef.current = llmConfig.provider
       const f: ProviderFields = {
-        apiKey: llmConfig.api_key,
-        model: llmConfig.model,
-        baseUrl: llmConfig.base_url ?? '',
+        apiKey: llmConfig.api_key, model: llmConfig.model, baseUrl: llmConfig.base_url ?? '',
       }
       fieldsRef.current[llmConfig.provider] = f
       setProvider(llmConfig.provider)
@@ -56,24 +33,14 @@ export function SettingsOverlay() {
     }
   }, [llmConfig])
 
-  // When overlay opens, re-request config to ensure freshness
-  useEffect(() => {
-    if (open) {
-      send({ type: 'get_llm_config' })
-    }
-  }, [open, send])
-
-  // Handle test result arriving
-  useEffect(() => {
-    if (testResult) setTesting(false)
-  }, [testResult])
-
-  // Handle model list arriving
-  useEffect(() => {
-    if (modelList) setLoadingModels(false)
-  }, [modelList])
+  useEffect(() => { if (open) send({ type: 'get_llm_config' }) }, [open, send])
+  useEffect(() => { if (testResult) setTesting(false) }, [testResult])
+  useEffect(() => { if (modelList) setLoadingModels(false) }, [modelList])
 
   if (!open) return null
+
+  const currentProvider = PROVIDERS.find(p => p.value === provider)
+  const showBaseUrl = currentProvider?.needsBaseUrl ?? false
 
   function handleClose() {
     const s = useGameStore.getState()
@@ -83,11 +50,8 @@ export function SettingsOverlay() {
   }
 
   function handleProviderChange(v: string) {
-    // Stash current provider's fields
     stashFields(provider, fields)
-    // Load the new provider's fields (or empty)
-    const saved = fieldsRef.current[v]
-    setFields(saved ? { ...saved } : { ...emptyFields })
+    setFields(fieldsRef.current[v] ? { ...fieldsRef.current[v] } : { ...emptyFields })
     setProvider(v)
     useGameStore.getState().setLLMModels(null)
     useGameStore.getState().setLLMTestResult(null)
@@ -101,11 +65,8 @@ export function SettingsOverlay() {
     setTesting(true)
     useGameStore.getState().setLLMTestResult(null)
     send({
-      type: 'test_llm_config',
-      provider,
-      api_key: fields.apiKey,
-      model: fields.model || '',
-      ...(provider === 'openai_compatible' && fields.baseUrl ? { base_url: fields.baseUrl } : {}),
+      type: 'test_llm_config', provider, api_key: fields.apiKey, model: fields.model || '',
+      ...(showBaseUrl && fields.baseUrl ? { base_url: fields.baseUrl } : {}),
     })
   }
 
@@ -113,25 +74,18 @@ export function SettingsOverlay() {
     setLoadingModels(true)
     useGameStore.getState().setLLMModels(null)
     send({
-      type: 'list_models',
-      provider,
-      api_key: fields.apiKey,
-      ...(provider === 'openai_compatible' && fields.baseUrl ? { base_url: fields.baseUrl } : {}),
+      type: 'list_models', provider, api_key: fields.apiKey,
+      ...(showBaseUrl && fields.baseUrl ? { base_url: fields.baseUrl } : {}),
     })
   }
 
   function handleSave() {
     stashFields(provider, fields)
     send({
-      type: 'set_llm_config',
-      provider,
-      api_key: fields.apiKey,
-      model: fields.model,
-      ...(provider === 'openai_compatible' && fields.baseUrl ? { base_url: fields.baseUrl } : {}),
+      type: 'set_llm_config', provider, api_key: fields.apiKey, model: fields.model,
+      ...(showBaseUrl && fields.baseUrl ? { base_url: fields.baseUrl } : {}),
     })
-    useGameStore.getState().setSettingsOpen(false)
-    useGameStore.getState().setLLMTestResult(null)
-    useGameStore.getState().setLLMModels(null)
+    handleClose()
   }
 
   const hasKey = fields.apiKey.trim().length > 0
@@ -155,50 +109,34 @@ export function SettingsOverlay() {
 
           <div className="settings-field">
             <span className="settings-field-label">服务商</span>
-            <select
-              className="settings-select"
-              value={provider}
-              onChange={(e) => handleProviderChange(e.target.value)}
-              disabled={isProcessing}
-            >
+            <select className="settings-select" value={provider} onChange={(e) => handleProviderChange(e.target.value)} disabled={isProcessing}>
               {PROVIDERS.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
             </select>
           </div>
 
-          {provider === 'openai_compatible' && (
+          {showBaseUrl && (
             <div className="settings-field">
               <span className="settings-field-label">API 地址</span>
-              <input
-                className="settings-input"
-                type="text"
-                value={fields.baseUrl}
+              <input className="settings-input" type="text" value={fields.baseUrl}
                 onChange={(e) => updateField('baseUrl', e.target.value)}
-                placeholder="http://localhost:11434/v1"
-                disabled={isProcessing}
-              />
-              <span className="settings-hint">OpenAI 兼容端点地址</span>
+                placeholder={currentProvider?.baseUrlPlaceholder ?? 'https://api.example.com/v1'}
+                disabled={isProcessing} />
+              <span className="settings-hint">{currentProvider?.baseUrlHint ?? ''}</span>
             </div>
           )}
 
           <div className="settings-field">
             <span className="settings-field-label">API Key</span>
             <div className="settings-key-row">
-              <input
-                className="settings-input settings-key-input"
-                type={showKey ? 'text' : 'password'}
-                value={fields.apiKey}
+              <input className="settings-input settings-key-input"
+                type={showKey ? 'text' : 'password'} value={fields.apiKey}
                 onChange={(e) => updateField('apiKey', e.target.value)}
-                placeholder="sk-..."
-                disabled={isProcessing}
-              />
-              <button
-                className="settings-eye-btn"
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                title={showKey ? '隐藏' : '显示'}
-              >
+                placeholder={currentProvider?.keyPlaceholder ?? 'sk-...'}
+                disabled={isProcessing} />
+              <button className="settings-eye-btn" type="button" onClick={() => setShowKey(!showKey)}
+                title={showKey ? '隐藏' : '显示'}>
                 {showKey ? '\u25C9' : '\u25CE'}
               </button>
             </div>
@@ -208,52 +146,27 @@ export function SettingsOverlay() {
             <span className="settings-field-label">模型</span>
             <div className="settings-model-row">
               {modelList && modelList.length > 0 ? (
-                <select
-                  className="settings-select settings-model-select"
-                  value={fields.model}
-                  onChange={(e) => updateField('model', e.target.value)}
-                  disabled={isProcessing}
-                >
+                <select className="settings-select settings-model-select" value={fields.model}
+                  onChange={(e) => updateField('model', e.target.value)} disabled={isProcessing}>
                   <option value="">默认模型</option>
-                  {modelList.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
+                  {modelList.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               ) : (
-                <input
-                  className="settings-input settings-model-input"
-                  type="text"
-                  value={fields.model}
+                <input className="settings-input settings-model-input" type="text" value={fields.model}
                   onChange={(e) => updateField('model', e.target.value)}
-                  placeholder={provider === 'gemini' ? 'gemini-2.5-flash' : provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'gpt-4o'}
-                  disabled={isProcessing}
-                />
+                  placeholder={getModelPlaceholder(provider)} disabled={isProcessing} />
               )}
-              <button
-                className="settings-fetch-btn"
-                disabled={!canTest || loadingModels}
-                onClick={handleListModels}
-                title="获取模型列表"
-              >
+              <button className="settings-fetch-btn" disabled={!canTest || loadingModels} onClick={handleListModels}>
                 {loadingModels ? '...' : '获取列表'}
               </button>
             </div>
-            <span className="settings-hint">留空使用默认模型，或点击获取可用列表</span>
           </div>
 
           <div className="settings-actions">
-            <button
-              className="settings-test-btn"
-              disabled={!canTest || testing}
-              onClick={handleTest}
-            >
+            <button className="settings-test-btn" disabled={!canTest || testing} onClick={handleTest}>
               {testing ? '测试中...' : '测试连接'}
             </button>
-            <button
-              className="settings-save-btn"
-              disabled={!canSave}
-              onClick={handleSave}
-            >
+            <button className="settings-save-btn" disabled={!canSave} onClick={handleSave}>
               保存并应用
             </button>
           </div>

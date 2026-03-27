@@ -24,7 +24,7 @@ export async function createEngine(): Promise<GameLoop> {
   // 2. Init sql.js + load persisted DB from IndexedDB
   _store = await SqlJsStore.create(async () => {
     const SQL = await initSqlJs({
-      locateFile: (file: string) => `/${file}`,
+      locateFile: (file: string) => `${import.meta.env.BASE_URL}${file}`,
     })
     return SQL
   })

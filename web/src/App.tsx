@@ -11,7 +11,7 @@ import { tabs } from './tabs/registry'
 // Import tabs so they self-register
 import './tabs/NarrativeTab'
 import './tabs/CharactersTab'
-import './tabs/DebugTab'
+if (!__PUBLIC_BUILD__) import('./tabs/DebugTab')
 import './tabs/SettingsTab'
 
 export function App() {

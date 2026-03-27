@@ -6,6 +6,7 @@ import type { GameLoop } from '@engine/engine/game-loop'
 import type { GenesisDocument } from '@engine/domain/models/genesis'
 import type { PlayerAttributes } from '@engine/domain/models/attributes'
 import type { AttributeCheckResult } from '@engine/orchestration/steps/arbitration-steps'
+import type { ChoiceForClient } from '@engine/engine/game-loop'
 import { STYLE_PRESETS } from '@engine/domain/services/extension-config'
 import type { StyleConfig } from '@engine/domain/services/extension-config'
 import {
@@ -78,7 +79,7 @@ function createListener(
 ): GameEventListener {
   function record(msg: any) {
     const PERSIST_TYPES = new Set([
-      'narrative', 'voices', 'check', 'status', 'init_progress',
+      'narrative', 'voices', 'check', 'choices', 'status', 'init_progress',
       'init_complete', 'char_create', 'error', 'save_result', 'save_error',
     ])
     if (PERSIST_TYPES.has(msg.type)) {
@@ -170,6 +171,11 @@ function createListener(
       const s = store.getState()
       s.setProcessing(false)
       s.setInsistencePrompt(true)
+    },
+
+    onChoices(choices: ChoiceForClient[]) {
+      record({ type: 'choices', choices })
+      store.getState().setChoices(choices)
     },
 
     onStatus(location: string, turn: number) {
@@ -373,9 +379,34 @@ async function handleMessage(
           store.getState().appendNarrative('[错误] 游戏尚未初始化', 'error')
           return
         }
+        store.getState().setChoices(null)
         await engine.processInput(msg.text)
         await engine.saveSessionHistory(sessionMessagesRef.current)
         break
+
+      case 'select_choice': {
+        if (!initializedRef.current) {
+          store.getState().appendNarrative('[错误] 游戏尚未初始化', 'error')
+          return
+        }
+        const currentChoices = store.getState().choices
+        if (!currentChoices || msg.index < 0 || msg.index >= currentChoices.length) {
+          store.getState().appendNarrative('[错误] 无效的选项', 'error')
+          return
+        }
+        const selectedChoice = currentChoices[msg.index]
+        store.getState().setChoices(null)
+        store.getState().appendNarrative(`> ${selectedChoice.text}`, 'player-input')
+        store.getState().setProcessing(true)
+        store.getState().setInputEnabled(false)
+        // Pass predetermined check info so AttributeCheckStep uses it directly
+        const predeterminedCheck = selectedChoice.check
+          ? { attribute_id: selectedChoice.check.attribute_id, difficulty: selectedChoice.check.difficulty }
+          : undefined
+        await engine.processInput(selectedChoice.text, { predeterminedCheck })
+        await engine.saveSessionHistory(sessionMessagesRef.current)
+        break
+      }
 
       case 'save':
         try {
@@ -621,6 +652,9 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
       s.appendNarrative(line, msg.passed ? 'check-pass' : 'check-fail')
       break
     }
+    case 'choices':
+      s.setChoices(msg.choices)
+      break
     case 'status':
       s.setStatus(msg.location, msg.turn)
       break

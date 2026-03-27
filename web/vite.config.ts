@@ -4,6 +4,10 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  base: process.env.GITHUB_PAGES ? '/Lorecraft/' : '/',
+  define: {
+    __PUBLIC_BUILD__: JSON.stringify(!!process.env.GITHUB_PAGES),
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -2,24 +2,39 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 36px;
-  padding: 0 12px;
+  height: 42px;
+  padding: 0 var(--space-md);
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  position: relative;
+}
+
+/* Subtle bottom accent line */
+.title-bar::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: var(--space-md);
+  right: var(--space-md);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-accent), transparent);
 }
 
 .title-logo {
   color: var(--title);
-  font-weight: bold;
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 14px;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  user-select: none;
 }
 
 .title-bar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .settings-wrapper {
@@ -29,47 +44,52 @@
 .settings-btn {
   background: none;
   border: none;
-  color: var(--status);
-  font-size: 16px;
+  color: var(--fg-muted);
+  font-size: 15px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 6px;
   line-height: 1;
-  transition: color 0.15s;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 .settings-btn:hover {
   color: var(--fg);
+  background: var(--bg-hover);
 }
 
 .settings-menu {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 6px);
   right: 0;
-  margin-top: 4px;
-  background: var(--bg-panel);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  min-width: 120px;
-  padding: 4px 0;
+  border-radius: var(--radius-md);
+  min-width: 140px;
+  padding: 4px;
   z-index: 50;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-dropdown);
+  animation: scaleIn var(--duration-fast) var(--ease-out);
+  transform-origin: top right;
 }
 
 .menu-item {
   display: block;
   width: 100%;
-  padding: 6px 14px;
+  padding: 8px 14px;
   background: none;
   border: none;
   color: var(--fg);
+  font-family: var(--font-ui);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast), color var(--duration-fast);
 }
 
 .menu-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-hover);
 }
 
 .menu-item.danger {
@@ -77,16 +97,17 @@
 }
 
 .menu-item.danger:hover {
-  background: rgba(208, 64, 64, 0.1);
+  background: rgba(184, 74, 74, 0.1);
 }
 
 .conn-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--status);
+  background: var(--fg-muted);
+  flex-shrink: 0;
 }
 
 .conn-dot.connected { background: var(--system); }
-.conn-dot.connecting { background: var(--highlight); animation: pulse 1.5s infinite; }
+.conn-dot.connecting { background: var(--warn); animation: pulse 1.5s infinite; }
 .conn-dot.disconnected { background: var(--error); }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ClientMessage, CharacterInfo } from '../types/protocol'
+import type { ClientMessage, CharacterInfo, ChoiceForClient } from '../types/protocol'
 
 export interface NarrativeLine {
   text: string
@@ -79,6 +79,9 @@ interface GameState {
   // Retryable error
   retryable: boolean
 
+  // Choices
+  choices: ChoiceForClient[] | null
+
   // Characters
   playerInfo: CharacterInfo | null
   npcList: CharacterInfo[]
@@ -109,6 +112,7 @@ interface GameState {
   setCharCreate: (state: CharCreateState | null) => void
   setInsistencePrompt: (v: boolean) => void
   setRetryable: (v: boolean) => void
+  setChoices: (choices: ChoiceForClient[] | null) => void
   setCharacters: (player: CharacterInfo, npcs: CharacterInfo[]) => void
   setSessionList: (sessions: SessionEntry[] | null) => void
   setLLMConfig: (config: LLMConfigState | null) => void
@@ -144,6 +148,8 @@ export const useGameStore = create<GameState>((set) => ({
 
   retryable: false,
 
+  choices: null,
+
   playerInfo: null,
   npcList: [],
 
@@ -174,6 +180,7 @@ export const useGameStore = create<GameState>((set) => ({
   setCharCreate: (charCreate) => set({ charCreate }),
   setInsistencePrompt: (insistencePrompt) => set({ insistencePrompt }),
   setRetryable: (retryable) => set({ retryable }),
+  setChoices: (choices) => set({ choices }),
   setCharacters: (playerInfo, npcList) => set({ playerInfo, npcList }),
   setSessionList: (sessionList) => set({ sessionList }),
   setLLMConfig: (llmConfig) => set({ llmConfig }),
@@ -197,6 +204,7 @@ export const useGameStore = create<GameState>((set) => ({
       charCreate: null,
       insistencePrompt: false,
       retryable: false,
+      choices: null,
       playerInfo: null,
       npcList: [],
       sessionList: null,

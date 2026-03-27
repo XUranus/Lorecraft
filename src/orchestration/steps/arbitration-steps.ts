@@ -5,20 +5,30 @@ import type { IStateStore, ILoreStore, IEventStore } from '../../infrastructure/
 import type {
   AtomicAction,
   ArbitrationResult,
-  ArbitrationReport,
 } from '../../domain/models/pipeline-io.js'
 import type { PlayerAttributes } from '../../domain/models/attributes.js'
 import { ATTRIBUTE_IDS, ATTRIBUTE_META } from '../../domain/models/attributes.js'
-import { ArbitrationReportSchema } from '../../domain/models/pipeline-io.js'
+import { ActionArbiterOutputSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
 import { prompts } from '../../ai/prompt/prompts.js'
 
 // ============================================================
-// Step 0: ParallelQueryStep — fetch memory + world state + lore
+// BeatPlan (shared with event-steps)
 // ============================================================
 
-export class ParallelQueryStep implements IPipelineStep<AtomicAction, AtomicAction> {
-  readonly name = 'ParallelQueryStep'
+export interface BeatPlan {
+  beats: Array<{ description: string; purpose: string }>
+  current_beat_index: number
+  created_at_turn: number
+}
+
+// ============================================================
+// FullContextStep — single parallel fetch for ALL pipeline data
+// (replaces ParallelQueryStep + EventContextStep)
+// ============================================================
+
+export class FullContextStep implements IPipelineStep<AtomicAction, AtomicAction> {
+  readonly name = 'FullContextStep'
   private readonly stateStore: IStateStore
   private readonly loreStore: ILoreStore
   private readonly eventStore: IEventStore
@@ -32,110 +42,75 @@ export class ParallelQueryStep implements IPipelineStep<AtomicAction, AtomicActi
   async execute(input: AtomicAction, context: PipelineContext): Promise<StepResult<AtomicAction>> {
     const characterId = context.player_character_id
 
-    const [subjectiveMemory, objectiveState, loreEntries, recentEvents] = await Promise.all([
+    const [
+      subjectiveMemory,
+      objectiveState,
+      loreEntries,
+      allTier1Events,
+      worldSummary,
+      participantStates,
+      worldTone,
+      phaseIndex,
+      phases,
+      beatPlan,
+    ] = await Promise.all([
       this.stateStore.get<unknown>(`memory:subjective:${characterId}`),
       this.stateStore.get<unknown>(`world:objective:${characterId}`),
       input.target ? this.loreStore.findBySubject(input.target) : Promise.resolve([]),
       this.eventStore.getAllTier1(),
+      this.stateStore.get<string>(`world:summary:${characterId}`),
+      this.stateStore.get<Array<{ npc_id: string; state_summary: string }>>(
+        `participants:states:${characterId}`,
+      ),
+      this.stateStore.get<string>('world:tone'),
+      this.stateStore.get<number>('narrative:current_phase_index'),
+      this.stateStore.get<Array<{ phase_id: string; description: string; direction_summary: string }>>('narrative:phases'),
+      this.stateStore.get<BeatPlan>('narrative:beat_plan'),
     ])
 
+    // Arbitration context
     context.data.set('subjective_memory', subjectiveMemory)
     context.data.set('objective_state', objectiveState)
     context.data.set('lore_entries', loreEntries)
-    context.data.set('recent_events', recentEvents.slice(-10).map((e) => e.title))
+    context.data.set('recent_events', allTier1Events.slice(-10).map((e) => e.title))
+
+    // Event generation context
+    const mem = subjectiveMemory as { recent_narrative?: string[]; known_facts?: string[] } | undefined
+    context.data.set('event_world_state', worldSummary ?? 'No world state available.')
+    context.data.set('event_participant_states', participantStates ?? [])
+    context.data.set('event_recent_narrative', mem?.recent_narrative?.slice(-5) ?? [])
+    context.data.set('event_known_facts', mem?.known_facts?.slice(-10) ?? [])
+    context.data.set('world_tone', worldTone ?? '')
+
+    // Narrative phase direction
+    if (phases && phases.length > 0) {
+      const idx = Math.min(phaseIndex ?? 0, phases.length - 1)
+      context.data.set('narrative_phase', phases[idx])
+      context.data.set('narrative_phase_index', idx)
+      context.data.set('narrative_phase_total', phases.length)
+    }
+
+    // Beat plan
+    if (beatPlan) {
+      context.data.set('beat_plan', beatPlan)
+    }
+
+    // Recent event weights for pacing
+    const recentWeights = allTier1Events.slice(-5).map((e) => e.weight)
+    context.data.set('recent_event_weights', recentWeights)
 
     return { status: 'continue', data: input }
   }
 }
 
 // ============================================================
-// FeasibilityCheckStep — single LLM call for all checks
-// ============================================================
-
-export class FeasibilityCheckStep implements IPipelineStep<AtomicAction, AtomicAction> {
-  readonly name = 'FeasibilityCheckStep'
-  private readonly agentRunner: AgentRunner
-  private readonly parser = new ResponseParser(ArbitrationReportSchema)
-
-  constructor(agentRunner: AgentRunner) {
-    this.agentRunner = agentRunner
-  }
-
-  async execute(input: AtomicAction, context: PipelineContext): Promise<StepResult<AtomicAction>> {
-    const subjectiveMemory = context.data.get('subjective_memory')
-    const objectiveState = context.data.get('objective_state')
-    const loreEntries = context.data.get('lore_entries')
-    const recentEvents = context.data.get('recent_events')
-
-    const systemPrompt = prompts.get('feasibility_judge')
-
-    const userMessage = JSON.stringify({
-      action: input,
-      subjective_memory: subjectiveMemory,
-      objective_world_state: objectiveState,
-      lore_context: loreEntries,
-      recent_events: recentEvents,
-    })
-
-    try {
-      const response = await this.agentRunner.run(
-        [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        { agent_type: 'FeasibilityJudge' },
-      )
-
-      const result = this.parser.parse(response.content)
-
-      if (!result.success) {
-        return {
-          status: 'error',
-          error: {
-            code: 'PARSE_FAILED',
-            message: `FeasibilityJudge response parse failed: ${result.error.message}`,
-            step: this.name,
-            recoverable: false,
-          },
-        }
-      }
-
-      const report = result.data
-      context.data.set('arbitration_report', report)
-      context.data.set('drift_flag', report.drift_flag)
-
-      if (!report.passed && report.rejection_narrative) {
-        return {
-          status: 'short_circuit',
-          output: {
-            text: report.rejection_narrative,
-            source: 'rejection',
-          } satisfies NarrativeOutput,
-        }
-      }
-
-      return { status: 'continue', data: input }
-    } catch (err) {
-      return {
-        status: 'error',
-        error: {
-          code: 'LLM_CALL_FAILED',
-          message: `FeasibilityJudge LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
-          step: this.name,
-          recoverable: false,
-        },
-      }
-    }
-  }
-}
-
-// ============================================================
-// AttributeCheckStep — d100 + attribute vs target (DM decides)
+// ActionArbiterStep — feasibility + skill check in one LLM call
+// (replaces FeasibilityCheckStep + AttributeCheckStep)
 // ============================================================
 
 export interface CheckModifier {
-  label: string    // e.g. "目标处于愤怒状态"
-  value: number    // positive = harder, negative = easier
+  label: string
+  value: number
 }
 
 export interface AttributeCheckResult {
@@ -164,28 +139,15 @@ const DIFFICULTY_IDS = Object.keys(DIFFICULTY_RANGES) as Array<keyof typeof DIFF
 
 function rollTarget(difficulty: string): number {
   const range = DIFFICULTY_RANGES[difficulty]
-  if (!range) return 80 // fallback to ROUTINE midpoint
+  if (!range) return 80
   const [min, max] = range
   return min + Math.floor(Math.random() * (max - min + 1))
 }
 
-const CheckModifierSchema = z.object({
-  label: z.string(),
-  value: z.number().int(),
-})
-
-const CheckDecisionSchema = z.object({
-  needs_check: z.boolean(),
-  attribute: z.string().nullable(),
-  difficulty: z.string().nullable(),
-  modifiers: z.array(CheckModifierSchema).nullable(),
-  reason: z.string().nullable(),
-})
-
-export class AttributeCheckStep implements IPipelineStep<AtomicAction, AtomicAction> {
-  readonly name = 'AttributeCheckStep'
+export class ActionArbiterStep implements IPipelineStep<AtomicAction, AtomicAction> {
+  readonly name = 'ActionArbiterStep'
   private readonly agentRunner: AgentRunner
-  private readonly parser = new ResponseParser(CheckDecisionSchema)
+  private readonly parser = new ResponseParser(ActionArbiterOutputSchema)
 
   constructor(agentRunner: AgentRunner) {
     this.agentRunner = agentRunner
@@ -193,24 +155,45 @@ export class AttributeCheckStep implements IPipelineStep<AtomicAction, AtomicAct
 
   async execute(input: AtomicAction, context: PipelineContext): Promise<StepResult<AtomicAction>> {
     const attrs = context.data.get('player_attributes') as PlayerAttributes | undefined
-    if (!attrs) {
-      context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
+
+    // If a choice with a predetermined check was selected, skip the full LLM arbiter
+    // but we still need feasibility — predetermined choices are assumed feasible
+    const predetermined = context.data.get('predetermined_check') as { attribute_id: string; difficulty: string } | undefined
+    if (predetermined) {
+      // Predetermined choices skip feasibility (they were generated by the engine)
+      context.data.set('drift_flag', false)
+      if (attrs) {
+        this.rollCheck(predetermined.attribute_id, predetermined.difficulty, [], attrs, context)
+      } else {
+        context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
+      }
       return { status: 'continue', data: input }
+    }
+
+    // Build attribute list for the prompt
+    let attrListStr = ''
+    if (attrs) {
+      const attrList = ATTRIBUTE_IDS.map((id) =>
+        `${ATTRIBUTE_META[id].display_name}(${id}): ${attrs[id]} — ${ATTRIBUTE_META[id].domain}`
+      ).join('\n')
+      attrListStr = `Player attributes:\n${attrList}`
     }
 
     const subjectiveMemory = context.data.get('subjective_memory')
     const objectiveState = context.data.get('objective_state')
+    const loreEntries = context.data.get('lore_entries')
+    const recentEvents = context.data.get('recent_events')
 
-    const attrList = ATTRIBUTE_IDS.map((id) => `${ATTRIBUTE_META[id].display_name}(${id}): ${attrs[id]} — ${ATTRIBUTE_META[id].domain}`).join('\n')
-
-    const systemPrompt = prompts.fill('check_dm', {
-      attribute_list: `Player attributes:\n${attrList}`,
+    const systemPrompt = prompts.fill('action_arbiter', {
+      attribute_list: attrListStr,
     })
 
     const userMessage = JSON.stringify({
       action: input,
       subjective_memory: subjectiveMemory,
       objective_world_state: objectiveState,
+      lore_context: loreEntries,
+      recent_events: recentEvents,
     })
 
     try {
@@ -219,64 +202,105 @@ export class AttributeCheckStep implements IPipelineStep<AtomicAction, AtomicAct
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
         ],
-        { agent_type: 'CheckDM' },
+        { agent_type: 'ActionArbiter' },
       )
 
       const result = this.parser.parse(response.content)
 
-      if (!result.success || !result.data.needs_check || !result.data.attribute || !result.data.difficulty) {
+      if (!result.success) {
+        return {
+          status: 'error',
+          error: {
+            code: 'PARSE_FAILED',
+            message: `ActionArbiter response parse failed: ${result.error.message}`,
+            step: this.name,
+            recoverable: false,
+          },
+        }
+      }
+
+      const data = result.data
+      context.data.set('drift_flag', data.drift_flag)
+
+      // Feasibility check
+      if (!data.passed && data.rejection_narrative) {
         context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
-        return { status: 'continue', data: input }
+        return {
+          status: 'short_circuit',
+          output: {
+            text: data.rejection_narrative,
+            source: 'rejection',
+          } satisfies NarrativeOutput,
+        }
       }
 
-      const decision = result.data
-      const difficulty = DIFFICULTY_IDS.includes(decision.difficulty as any) ? decision.difficulty! : 'ROUTINE'
-      const baseTarget = rollTarget(difficulty)
-      const modifiers: CheckModifier[] = (decision.modifiers ?? []).map((m) => ({
-        label: m.label,
-        value: Math.max(-30, Math.min(30, m.value)),  // clamp to [-30, 30]
-      }))
-      const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0)
-      const target = Math.max(10, baseTarget + modifierSum)  // floor at 10
-
-      const attrId = decision.attribute as keyof PlayerAttributes
-      const meta = ATTRIBUTE_META[attrId as typeof ATTRIBUTE_IDS[number]]
-      if (!meta) {
+      // Skill check
+      if (data.needs_check && data.attribute && data.difficulty && attrs) {
+        const modifiers: CheckModifier[] = (data.modifiers ?? []).map((m) => ({
+          label: m.label,
+          value: Math.max(-30, Math.min(30, m.value)),
+        }))
+        this.rollCheck(data.attribute, data.difficulty, modifiers, attrs, context)
+      } else {
         context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
-        return { status: 'continue', data: input }
       }
-
-      // Roll d100
-      const roll = Math.floor(Math.random() * 100) + 1
-      const attrValue = attrs[attrId] ?? 0
-      const total = roll + attrValue
-      const passed = total >= target
-
-      const checkResult: AttributeCheckResult = {
-        needed: true,
-        attribute_id: attrId,
-        attribute_display_name: meta.display_name,
-        difficulty,
-        base_target: baseTarget,
-        modifiers,
-        target,
-        roll,
-        attribute_value: attrValue,
-        total,
-        passed,
-      }
-
-      context.data.set('attribute_check', checkResult)
-      // Store pass/fail for EventGenerator to use
-      context.data.set('check_passed', passed)
-      context.data.set('check_description', `${meta.display_name}检定[${difficulty}]: d100(${roll}) + ${meta.display_name}(${attrValue}) = ${total} vs 目标${target} → ${passed ? '成功' : '失败'}`)
 
       return { status: 'continue', data: input }
     } catch (err) {
-      // On error, skip the check
-      context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
-      return { status: 'continue', data: input }
+      return {
+        status: 'error',
+        error: {
+          code: 'LLM_CALL_FAILED',
+          message: `ActionArbiter LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
+          step: this.name,
+          recoverable: false,
+        },
+      }
     }
+  }
+
+  private rollCheck(
+    attributeId: string,
+    difficultyStr: string,
+    modifiers: CheckModifier[],
+    attrs: PlayerAttributes,
+    context: PipelineContext,
+  ): void {
+    const difficulty = DIFFICULTY_IDS.includes(difficultyStr as any) ? difficultyStr : 'ROUTINE'
+    const baseTarget = rollTarget(difficulty)
+    const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0)
+    const target = Math.max(10, baseTarget + modifierSum)
+
+    const attrId = attributeId as keyof PlayerAttributes
+    const meta = ATTRIBUTE_META[attrId as typeof ATTRIBUTE_IDS[number]]
+    if (!meta) {
+      context.data.set('attribute_check', { needed: false } satisfies AttributeCheckResult)
+      return
+    }
+
+    const roll = Math.floor(Math.random() * 100) + 1
+    const attrValue = attrs[attrId] ?? 0
+    const total = roll + attrValue
+    const passed = total >= target
+
+    const checkResult: AttributeCheckResult = {
+      needed: true,
+      attribute_id: attrId,
+      attribute_display_name: meta.display_name,
+      difficulty,
+      base_target: baseTarget,
+      modifiers,
+      target,
+      roll,
+      attribute_value: attrValue,
+      total,
+      passed,
+    }
+
+    context.data.set('attribute_check', checkResult)
+    context.data.set('check_passed', passed)
+    context.data.set('check_description',
+      `${meta.display_name}检定[${difficulty}]: d100(${roll}) + ${meta.display_name}(${attrValue}) = ${total} vs 目标${target} → ${passed ? '成功' : '失败'}`)
   }
 }
 

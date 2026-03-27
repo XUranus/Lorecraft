@@ -1,18 +1,63 @@
 :root {
-  --bg: #0a0a0a;
-  --bg-panel: #111111;
-  --bg-input: #0e0e0e;
-  --bg-elevated: #141414;
-  --fg: #c0c0c0;
-  --border: #2a2a2a;
-  --title: #e0a040;
-  --narrative: #d0d0d0;
-  --voice: #70a0d0;
-  --input-fg: #e0e0e0;
-  --status: #808080;
-  --error: #d04040;
-  --system: #60a060;
-  --highlight: #e0c070;
-  --scrollbar-bg: #1a1a1a;
-  --scrollbar-thumb: #333333;
+  /* ── Background layers ── */
+  --bg:          #08080a;
+  --bg-panel:    #0e0e12;
+  --bg-input:    #0a0a0e;
+  --bg-elevated: #131318;
+  --bg-hover:    rgba(255, 255, 255, 0.035);
+
+  /* ── Foreground ── */
+  --fg:          #b8b0a8;
+  --fg-muted:    #787068;
+  --input-fg:    #d0c8c0;
+
+  /* ── Borders ── */
+  --border:      #1e1c20;
+  --border-subtle: #161418;
+  --border-accent: rgba(196, 149, 106, 0.25);
+
+  /* ── Accent: Warm Amber / Parchment Gold ── */
+  --title:       #c4956a;
+  --title-dim:   #9a7554;
+  --highlight:   #d4a86a;
+
+  /* ── Semantic colors ── */
+  --narrative:   #c0b8b0;
+  --voice:       #7090b8;
+  --system:      #5a9a6a;
+  --status:      #605848;
+  --error:       #b84a4a;
+  --warn:        #b89a40;
+
+  /* ── Scrollbar ── */
+  --scrollbar-bg:    #0c0c10;
+  --scrollbar-thumb: #2a2828;
+
+  /* ── Typography ── */
+  --font-display:   'Cinzel', 'Noto Serif SC', Georgia, serif;
+  --font-narrative:  'Crimson Pro', 'Noto Serif SC', Georgia, serif;
+  --font-ui:         'DM Sans', 'Noto Sans SC', 'PingFang SC', system-ui, sans-serif;
+  --font-mono:       'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* ── Spacing scale ── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* ── Radii ── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* ── Shadows ── */
+  --shadow-overlay: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 1px rgba(196, 149, 106, 0.1);
+  --shadow-dropdown: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 30px rgba(196, 149, 106, 0.06);
+
+  /* ── Transitions ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 0.15s;
+  --duration-normal: 0.25s;
 }

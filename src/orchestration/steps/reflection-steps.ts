@@ -9,7 +9,7 @@ import type {
 } from '../../domain/models/pipeline-io.js'
 import type { PlayerAttributes } from '../../domain/models/attributes.js'
 import { ATTRIBUTE_IDS, ATTRIBUTE_META } from '../../domain/models/attributes.js'
-import { TraitVoiceOutputSchema, DebateOutputSchema } from '../../domain/models/pipeline-io.js'
+import { VoiceDebateOutputSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
 import { prompts } from '../../ai/prompt/prompts.js'
 
@@ -39,8 +39,6 @@ export class ActiveTraitStep implements IPipelineStep<ParsedIntent, ParsedIntent
       return { status: 'continue', data: input }
     }
 
-    // Build active voices: all attributes with value > 0, sorted by value desc
-    // Higher attribute = more likely to speak (LLM decides, but we give it the info)
     const activeVoices = ATTRIBUTE_IDS
       .map((id) => ({
         attr_id: id,
@@ -49,7 +47,7 @@ export class ActiveTraitStep implements IPipelineStep<ParsedIntent, ParsedIntent
         domain: ATTRIBUTE_META[id].domain,
         voice_personality: ATTRIBUTE_META[id].voice_personality,
       }))
-      .filter((v) => v.value > 10) // Extremely low attributes are too weak to speak
+      .filter((v) => v.value > 10)
       .sort((a, b) => b.value - a.value)
 
     context.data.set('active_voices', activeVoices)
@@ -98,7 +96,8 @@ export class ShouldSpeakStep implements IPipelineStep<ParsedIntent, ParsedIntent
 }
 
 // ============================================================
-// Step 4: VoiceGenerationStep — LLM call for attribute voices
+// Step 4: VoiceDebateStep — single LLM call for voices + debate
+// (replaces VoiceGenerationStep + DebateStep)
 // ============================================================
 
 interface ActiveVoice {
@@ -109,10 +108,10 @@ interface ActiveVoice {
   voice_personality: string
 }
 
-export class VoiceGenerationStep implements IPipelineStep<ParsedIntent, ParsedIntent> {
-  readonly name = 'VoiceGenerationStep'
+export class VoiceDebateStep implements IPipelineStep<ParsedIntent, ParsedIntent> {
+  readonly name = 'VoiceDebateStep'
   private readonly agentRunner: AgentRunner
-  private readonly parser = new ResponseParser(TraitVoiceOutputSchema)
+  private readonly parser = new ResponseParser(VoiceDebateOutputSchema)
 
   constructor(agentRunner: AgentRunner) {
     this.agentRunner = agentRunner
@@ -121,15 +120,15 @@ export class VoiceGenerationStep implements IPipelineStep<ParsedIntent, ParsedIn
   async execute(input: ParsedIntent, context: PipelineContext): Promise<StepResult<ParsedIntent>> {
     if (context.data.get('reflection_silent') === true) {
       context.data.set('trait_voices', { voices: [], debate_needed: false } satisfies TraitVoiceOutput)
+      context.data.set('debate_output', null)
       return { status: 'continue', data: input }
     }
 
     const activeVoices = (context.data.get('active_voices') as ActiveVoice[]) ?? []
     const injectedContext = context.data.get('injected_context') as string | null
-
-    const systemPrompt = prompts.get('inner_voice_generator')
-
     const worldAssertionHint = context.data.get('world_assertion_hint') as string | null
+
+    const systemPrompt = prompts.get('voice_debate')
 
     const userMessage = JSON.stringify({
       active_voices: activeVoices.map((v) => ({
@@ -150,7 +149,7 @@ export class VoiceGenerationStep implements IPipelineStep<ParsedIntent, ParsedIn
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
         ],
-        { agent_type: 'InnerVoiceGenerator' },
+        { agent_type: 'VoiceDebateGenerator' },
       )
 
       const result = this.parser.parse(response.content)
@@ -160,21 +159,29 @@ export class VoiceGenerationStep implements IPipelineStep<ParsedIntent, ParsedIn
           status: 'error',
           error: {
             code: 'PARSE_FAILED',
-            message: `InnerVoiceGenerator parse failed: ${result.error.message}`,
+            message: `VoiceDebateGenerator parse failed: ${result.error.message}`,
             step: this.name,
             recoverable: false,
           },
         }
       }
 
-      context.data.set('trait_voices', result.data)
+      // Set both context keys for backward compatibility with InsistenceStep
+      context.data.set('trait_voices', {
+        voices: result.data.voices,
+        debate_needed: false,
+      } satisfies TraitVoiceOutput)
+      context.data.set('debate_output', {
+        debate_lines: result.data.debate_lines,
+      } satisfies DebateOutput)
+
       return { status: 'continue', data: input }
     } catch (err) {
       return {
         status: 'error',
         error: {
           code: 'LLM_CALL_FAILED',
-          message: `InnerVoiceGenerator LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
+          message: `VoiceDebateGenerator LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
           step: this.name,
           recoverable: false,
         },
@@ -184,74 +191,7 @@ export class VoiceGenerationStep implements IPipelineStep<ParsedIntent, ParsedIn
 }
 
 // ============================================================
-// Step 5: DebateStep — conditional LLM debate generation
-// ============================================================
-
-export class DebateStep implements IPipelineStep<ParsedIntent, ParsedIntent> {
-  readonly name = 'DebateStep'
-  private readonly agentRunner: AgentRunner
-  private readonly parser = new ResponseParser(DebateOutputSchema)
-
-  constructor(agentRunner: AgentRunner) {
-    this.agentRunner = agentRunner
-  }
-
-  async execute(input: ParsedIntent, context: PipelineContext): Promise<StepResult<ParsedIntent>> {
-    const traitVoices = context.data.get('trait_voices') as TraitVoiceOutput | undefined
-
-    if (!traitVoices || !traitVoices.debate_needed) {
-      context.data.set('debate_output', null)
-      return { status: 'continue', data: input }
-    }
-
-    const systemPrompt = prompts.get('debate_generator')
-
-    const userMessage = JSON.stringify({
-      voices: traitVoices.voices,
-      intent_summary: input.intent,
-    })
-
-    try {
-      const response = await this.agentRunner.run(
-        [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        { agent_type: 'DebateGenerator' },
-      )
-
-      const result = this.parser.parse(response.content)
-
-      if (!result.success) {
-        return {
-          status: 'error',
-          error: {
-            code: 'PARSE_FAILED',
-            message: `DebateGenerator parse failed: ${result.error.message}`,
-            step: this.name,
-            recoverable: false,
-          },
-        }
-      }
-
-      context.data.set('debate_output', result.data)
-      return { status: 'continue', data: input }
-    } catch (err) {
-      return {
-        status: 'error',
-        error: {
-          code: 'LLM_CALL_FAILED',
-          message: `DebateGenerator LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
-          step: this.name,
-          recoverable: false,
-        },
-      }
-    }
-  }
-}
-
-// ============================================================
-// Step 6: InsistenceStep — state machine for force_flag
+// Step 5: InsistenceStep — state machine for force_flag
 // ============================================================
 
 export class InsistenceStep implements IPipelineStep<ParsedIntent, ReflectionPipelineOutput> {
@@ -325,7 +265,7 @@ export class InsistenceStep implements IPipelineStep<ParsedIntent, ReflectionPip
 }
 
 // ============================================================
-// Step 7: VoiceWriteStep — write voice lines to context
+// Step 6: VoiceWriteStep — write voice lines to context
 // ============================================================
 
 export class VoiceWriteStep
@@ -337,7 +277,6 @@ export class VoiceWriteStep
     input: ReflectionPipelineOutput,
     context: PipelineContext,
   ): Promise<StepResult<ReflectionPipelineOutput>> {
-    // Write voice lines to context so the game loop can send them to the client
     if (input.voices.length > 0) {
       context.data.set('voice_lines', input.voices.map((v) => ({
         trait_id: v.trait_id,

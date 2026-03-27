@@ -28,21 +28,18 @@ import {
   ActiveTraitStep,
   InjectionReadStep,
   ShouldSpeakStep,
-  VoiceGenerationStep,
-  DebateStep,
+  VoiceDebateStep,
   InsistenceStep,
   VoiceWriteStep,
 } from '../orchestration/steps/reflection-steps.js'
 import {
-  ParallelQueryStep,
-  FeasibilityCheckStep,
-  AttributeCheckStep,
+  FullContextStep,
+  ActionArbiterStep,
   ArbitrationResultStep,
 } from '../orchestration/steps/arbitration-steps.js'
 import type { AttributeCheckResult } from '../orchestration/steps/arbitration-steps.js'
 import {
-  EventContextStep,
-  PacingCheckStep,
+  PacingStep,
   EventGeneratorStep,
   EventSchemaValidationStep,
   EventIdStep,
@@ -51,11 +48,11 @@ import {
   NarrativeProgressStep,
   EventBroadcastStep,
 } from '../orchestration/steps/event-steps.js'
-import type { ParsedIntent, InsistenceState } from '../domain/models/pipeline-io.js'
+import type { ParsedIntent, InsistenceState, ChoiceOption } from '../domain/models/pipeline-io.js'
 import type { GenesisDocument } from '../domain/models/genesis.js'
 import type { LocationEdge } from '../domain/models/world.js'
 import type { PlayerAttributes } from '../domain/models/attributes.js'
-import { randomAllocate, validateAllocation, ATTRIBUTE_IDS, ATTRIBUTE_META } from '../domain/models/attributes.js'
+import { randomAllocate, validateAllocation, ATTRIBUTE_IDS, ATTRIBUTE_META, type PlayerAttributes as PlayerAttrs } from '../domain/models/attributes.js'
 import { uuid } from '../utils/uuid.js'
 
 // ============================================================
@@ -74,11 +71,22 @@ export interface GameState {
 // TUI Event Emitter
 // ============================================================
 
+export interface ChoiceForClient {
+  text: string
+  check?: {
+    attribute_id: string
+    attribute_display_name: string
+    difficulty: string
+    pass_chance: number
+  }
+}
+
 export interface GameEventListener {
   onNarrative(text: string, source: string): void
   onVoices(voices: Array<{ trait_id: string; line: string }>): void
   onCheck?(check: AttributeCheckResult): void
   onInsistencePrompt?(voices: Array<{ trait_id: string; line: string }>): void
+  onChoices?(choices: ChoiceForClient[]): void
   onStatus(location: string, turn: number): void
   onError(message: string, retryable?: boolean): void
   onStyleSelect?(presets: Array<{ label: string; description: string }>): void
@@ -375,7 +383,7 @@ export class GameLoop {
     this.selectedStyle = null
   }
 
-  async processInput(playerInput: string): Promise<void> {
+  async processInput(playerInput: string, options?: { predeterminedCheck?: { attribute_id: string; difficulty: string } }): Promise<void> {
     if (!this.gameState) {
       this.listener?.onError('游戏尚未初始化')
       return
@@ -388,6 +396,11 @@ export class GameLoop {
       this.gameState.playerCharacterId,
       this.gameState.currentTurn,
     )
+
+    // Inject predetermined check from choice selection (bypasses check_dm LLM call)
+    if (options?.predeterminedCheck) {
+      context.data.set('predetermined_check', options.predeterminedCheck)
+    }
 
     // Emit debug turn start
     this.listener?.onDebugTurnStart?.(this.gameState.currentTurn, playerInput)
@@ -517,6 +530,13 @@ export class GameLoop {
           }
 
           this.listener?.onNarrative(result.text, result.source)
+
+          // Send choices if available
+          const rawChoices = context.data.get('raw_choices') as ChoiceOption[] | undefined
+          if (rawChoices && rawChoices.length > 0 && playerAttrs) {
+            const enriched = this.enrichChoices(rawChoices, playerAttrs as PlayerAttrs)
+            this.listener?.onChoices?.(enriched)
+          }
         }
 
         // If this was a rejection (short-circuit), write back to state for context continuity
@@ -753,6 +773,38 @@ export class GameLoop {
     })
   }
 
+  // ---- Choice Enrichment ----
+
+  private enrichChoices(rawChoices: ChoiceOption[], attrs: PlayerAttrs): ChoiceForClient[] {
+    const DIFFICULTY_MIDPOINTS: Record<string, number> = {
+      TRIVIAL: 50, ROUTINE: 80, HARD: 110, VERY_HARD: 140, LEGENDARY: 170,
+    }
+
+    return rawChoices.map((c) => {
+      if (!c.check) return { text: c.text }
+
+      const attrId = c.check.attribute_id as keyof typeof ATTRIBUTE_META
+      const meta = ATTRIBUTE_META[attrId as typeof ATTRIBUTE_IDS[number]]
+      if (!meta) return { text: c.text }
+
+      const attrValue = attrs[attrId] ?? 0
+      const target = DIFFICULTY_MIDPOINTS[c.check.difficulty] ?? 80
+      // d100 ranges 1-100: pass when roll + attrValue >= target
+      // P(pass) = P(roll >= target - attrValue) = max(0, min(100, 101 - target + attrValue))
+      const passChance = Math.max(0, Math.min(100, 101 - target + attrValue))
+
+      return {
+        text: c.text,
+        check: {
+          attribute_id: c.check.attribute_id,
+          attribute_display_name: meta.display_name,
+          difficulty: c.check.difficulty,
+          pass_chance: Math.round(passChance),
+        },
+      }
+    })
+  }
+
   // ---- Pipeline Construction ----
 
   private buildMainPipeline(): MainPipeline {
@@ -769,23 +821,20 @@ export class GameLoop {
     pipeline.addStep(new ActiveTraitStep())
     pipeline.addStep(new InjectionReadStep())
     pipeline.addStep(new ShouldSpeakStep())
-    pipeline.addStep(new VoiceGenerationStep(this.agentRunner))
-    pipeline.addStep(new DebateStep(this.agentRunner))
+    pipeline.addStep(new VoiceDebateStep(this.agentRunner))
     pipeline.addStep(new InsistenceStep())
     pipeline.addStep(new VoiceWriteStep())
 
-    // Arbitration stage — feasibility + attribute check
-    pipeline.addStep(new ParallelQueryStep(this.stateStore, this.loreStore, this.eventStore), (_prevOutput, ctx) => {
+    // Arbitration stage — full context fetch + unified feasibility/check
+    pipeline.addStep(new FullContextStep(this.stateStore, this.loreStore, this.eventStore), (_prevOutput, ctx) => {
       const parsedIntent = ctx.data.get('parsed_intent') as ParsedIntent | undefined
       return parsedIntent?.atomic_actions?.[0] ?? _prevOutput
     })
-    pipeline.addStep(new FeasibilityCheckStep(this.agentRunner))
-    pipeline.addStep(new AttributeCheckStep(this.agentRunner))
+    pipeline.addStep(new ActionArbiterStep(this.agentRunner))
     pipeline.addStep(new ArbitrationResultStep())
 
     // Event stage
-    pipeline.addStep(new EventContextStep(this.stateStore, this.eventStore))
-    pipeline.addStep(new PacingCheckStep(this.agentRunner))
+    pipeline.addStep(new PacingStep())
     pipeline.addStep(new EventGeneratorStep(this.agentRunner))
     pipeline.addStep(new EventSchemaValidationStep())
     pipeline.addStep(new EventIdStep())

@@ -78,6 +78,17 @@ export const DebateOutputSchema = z.object({
 
 export type DebateOutput = z.infer<typeof DebateOutputSchema>
 
+// Combined voice + debate output (VoiceDebateStep)
+export const VoiceDebateOutputSchema = z.object({
+  voices: z.array(VoiceLineSchema),
+  debate_lines: z.array(z.object({
+    trait_id: z.string(),
+    line: z.string(),
+  })).default([]),
+})
+
+export type VoiceDebateOutput = z.infer<typeof VoiceDebateOutputSchema>
+
 export const InsistenceState = z.enum(['NORMAL', 'WARNED', 'INSISTING'])
 export type InsistenceState = z.infer<typeof InsistenceState>
 
@@ -97,6 +108,27 @@ export const ArbitrationReportSchema = z.object({
 })
 
 export type ArbitrationReport = z.infer<typeof ArbitrationReportSchema>
+
+// Combined feasibility + check decision (ActionArbiterStep)
+export const ActionArbiterOutputSchema = z.object({
+  // Feasibility
+  passed: z.boolean(),
+  checks: z.array(z.object({
+    dimension: z.string(),
+    passed: z.boolean(),
+    reason: z.string().nullable(),
+  })),
+  drift_flag: z.boolean(),
+  rejection_narrative: z.string().nullable(),
+  // Skill check
+  needs_check: z.boolean(),
+  attribute: z.string().nullable(),
+  difficulty: z.string().nullable(),
+  modifiers: z.array(z.object({ label: z.string(), value: z.number().int() })).nullable(),
+  check_reason: z.string().nullable(),
+})
+
+export type ActionArbiterOutput = z.infer<typeof ActionArbiterOutputSchema>
 
 export const ArbitrationResultSchema = z.object({
   passed: z.boolean(),
@@ -129,6 +161,20 @@ export const CharacterObservationSchema = z.object({
 
 export type CharacterObservation = z.infer<typeof CharacterObservationSchema>
 
+export const ChoiceCheckSchema = z.object({
+  attribute_id: z.string(),
+  difficulty: z.enum(['TRIVIAL', 'ROUTINE', 'HARD', 'VERY_HARD', 'LEGENDARY']),
+})
+
+export type ChoiceCheck = z.infer<typeof ChoiceCheckSchema>
+
+export const ChoiceOptionSchema = z.object({
+  text: z.string(),
+  check: ChoiceCheckSchema.nullable().default(null),
+})
+
+export type ChoiceOption = z.infer<typeof ChoiceOptionSchema>
+
 export const EventGeneratorOutputSchema = z.object({
   title: z.string(),
   tags: z.array(z.string()),
@@ -138,6 +184,7 @@ export const EventGeneratorOutputSchema = z.object({
   narrative_text: z.string(),
   state_changes: z.array(StateChangeSchema),
   character_observations: z.array(CharacterObservationSchema).default([]),
+  choices: z.array(ChoiceOptionSchema).min(2).max(2).default([]),
 })
 
 export type EventGeneratorOutput = z.infer<typeof EventGeneratorOutputSchema>
