@@ -154,6 +154,13 @@ export class EventGeneratorStep
     // Include attribute check result so narrative reflects pass/fail
     const checkDesc = context.data.get('check_description') as string | undefined
     const checkPassed = context.data.get('check_passed') as boolean | undefined
+    const checkResult = context.data.get('attribute_check') as import('./arbitration-steps.js').AttributeCheckResult | undefined
+    const checkOutcome = checkResult?.outcome
+    const checkMargin = checkResult?.margin
+
+    // Luck value for critical outcome narrative modulation
+    const playerAttrs = context.data.get('player_attributes') as import('../../domain/models/attributes.js').PlayerAttributes | undefined
+    const luckValue = playerAttrs?.luck
 
     // Recent narrative history for continuity
     const recentNarrative = context.data.get('event_recent_narrative') as string[] | undefined
@@ -172,7 +179,7 @@ export class EventGeneratorStep
       participants_state: participantStates ?? [],
       recent_narrative: recentNarrative ?? [],
       known_facts: knownFacts ?? [],
-      attribute_check: checkDesc ? { description: checkDesc, passed: checkPassed } : null,
+      attribute_check: checkDesc ? { description: checkDesc, passed: checkPassed, outcome: checkOutcome, margin: checkMargin, luck_value: luckValue ?? null } : null,
       player_wish: playerWish ?? null,
       narrative_direction: narrativePhase ? {
         phase: narrativePhase.description,

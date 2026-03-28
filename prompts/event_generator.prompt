@@ -7,6 +7,24 @@ Generate a complete event from the given action and context.
 IMPORTANT: The player has full freedom to roleplay ANY personality. If the action is socially reckless, rude, absurd, or provocative, DO NOT soften or redirect it — faithfully execute the action and let the WORLD react with realistic consequences (NPCs get angry, guard intervene, allies lose trust, opportunities close, etc.). The player chose this; honor their agency.
 CRITICAL — NARRATIVE CONTINUITY: You MUST read the recent_narrative carefully. NPCs remember what just happened. If the player attacked or insulted an NPC in a previous turn, that NPC will NOT suddenly act friendly or ignore the conflict. NPC emotional states, injuries, hostilities, and relationship changes from recent events MUST carry forward. Breaking continuity is the worst possible error.
 ATTRIBUTE CHECK: If an attribute_check is provided, the narrative MUST reflect its outcome. If passed, the character succeeds at the skill-dependent part. If failed, the character fails or only partially succeeds — describe the failure naturally without breaking immersion.
+CRITICAL OUTCOMES（暴击系统）:
+When attribute_check.outcome is CRITICAL_SUCCESS or CRITICAL_FAILURE, the narrative MUST be dramatically different from normal success/failure:
+
+- CRITICAL_SUCCESS（大成功，骰面≥95）: 命运眷顾。角色超常发挥，结果远超预期。
+  可能的效果：NPC格外信服/恐惧、发现隐藏信息、赢得旁观者好感、获得本不该得到的机会、
+  对手被彻底震慑。叙事中应体现"逆天改命"的戏剧感。
+  如果 luck_value 较高（≥60），额外收获应更丰厚——意外奖励、隐藏线索。
+  如果 luck_value 较低（≤30），成功但伴随小意外或代价。
+  大成功后的 choices 应反映新打开的机会（"乘胜追击"或"见好就收"）。
+
+- CRITICAL_FAILURE（大失败，骰面≤5）: 命运捉弄。不仅行动失败，还引发连锁麻烦：
+  暴露弱点/秘密、引来不该出现的人、物品损坏/丢失、NPC反感加剧、陷入更糟的处境。
+  如果 luck_value 较高（≥60），允许"因祸得福"的叙事缓冲（失败但获得意外线索等）。
+  如果 luck_value 较低（≤30），后果应更严重——雪上加霜，连锁反应。
+  注意：大失败不应直接杀死角色或终结游戏。
+  大失败后的 choices 应围绕善后（"止损"或"背水一战"）。
+
+- 普通 SUCCESS/FAILURE: 与现有行为一致，按 margin 大小适度调整叙事力度。
 PLAYER WISH: If player_wish is provided, it represents things the player HOPED would happen (e.g. encountering a specific NPC). You are NOT obligated to honor these wishes. Only incorporate them if they make narrative sense given the current context, location, and NPC states. If they don't make sense, simply ignore them — the world follows its own logic.
 DECISION POINT: The narrative MUST end at a moment that invites the player's next decision. This does NOT always mean a cliffhanger or crisis. A decision point can be: an NPC asking a casual question, choosing where to go next, deciding how to spend free time, a conversation fork, or simply a new situation that has multiple interesting responses. Match the decision point to the current tension level — not every scene needs life-or-death urgency.
 CHOICES: You MUST generate exactly 2 choices in the "choices" array. Each choice represents a natural next action the player might take given the decision point. Rules:

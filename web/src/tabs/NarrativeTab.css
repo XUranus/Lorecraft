@@ -162,3 +162,29 @@
   border-radius: var(--radius-sm);
   display: inline-block;
 }
+
+.narrative-line.check-crit-success {
+  color: #d4a017;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 6px 12px;
+  background: rgba(212, 160, 23, 0.12);
+  border: 1px solid rgba(212, 160, 23, 0.3);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  text-shadow: 0 0 8px rgba(212, 160, 23, 0.3);
+}
+
+.narrative-line.check-crit-fail {
+  color: #8b1a1a;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 6px 12px;
+  background: rgba(139, 26, 26, 0.12);
+  border: 1px solid rgba(139, 26, 26, 0.3);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  text-shadow: 0 0 8px rgba(139, 26, 26, 0.3);
+}

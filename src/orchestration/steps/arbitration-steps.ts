@@ -113,6 +113,8 @@ export interface CheckModifier {
   value: number
 }
 
+export type CheckOutcome = 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_FAILURE'
+
 export interface AttributeCheckResult {
   needed: boolean
   attribute_id?: string
@@ -125,6 +127,8 @@ export interface AttributeCheckResult {
   attribute_value?: number
   total?: number
   passed?: boolean
+  outcome?: CheckOutcome
+  margin?: number
 }
 
 const DIFFICULTY_RANGES: Record<string, [number, number]> = {
@@ -288,7 +292,31 @@ export class ActionArbiterStep implements IPipelineStep<AtomicAction, AtomicActi
     const roll = Math.floor(Math.random() * 100) + 1
     const attrValue = attrs[attrId] ?? 0
     const total = roll + attrValue
-    const passed = total >= target
+    const margin = total - target
+
+    // Critical outcomes override numeric comparison
+    let outcome: CheckOutcome
+    let passed: boolean
+    if (roll >= 95) {
+      outcome = 'CRITICAL_SUCCESS'
+      passed = true
+    } else if (roll <= 5) {
+      outcome = 'CRITICAL_FAILURE'
+      passed = false
+    } else if (total >= target) {
+      outcome = 'SUCCESS'
+      passed = true
+    } else {
+      outcome = 'FAILURE'
+      passed = false
+    }
+
+    const outcomeLabel: Record<CheckOutcome, string> = {
+      CRITICAL_SUCCESS: '大成功!',
+      SUCCESS: '成功',
+      FAILURE: '失败',
+      CRITICAL_FAILURE: '大失败!',
+    }
 
     const checkResult: AttributeCheckResult = {
       needed: true,
@@ -302,12 +330,15 @@ export class ActionArbiterStep implements IPipelineStep<AtomicAction, AtomicActi
       attribute_value: attrValue,
       total,
       passed,
+      outcome,
+      margin,
     }
 
     context.data.set('attribute_check', checkResult)
     context.data.set('check_passed', passed)
+    const marginStr = margin >= 0 ? `+${margin}` : `${margin}`
     context.data.set('check_description',
-      `${meta.display_name}检定[${difficulty}]: d100(${roll}) + ${meta.display_name}(${attrValue}) = ${total} vs 目标${target} → ${passed ? '成功' : '失败'}`)
+      `${meta.display_name}检定[${difficulty}]: d100(${roll}) + ${meta.display_name}(${attrValue}) = ${total} vs 目标${target} → ${outcomeLabel[outcome]} (${marginStr})`)
   }
 }
 

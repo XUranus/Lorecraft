@@ -153,11 +153,26 @@ function createListener(
           attribute_value: check.attribute_value!,
           total: check.total!,
           passed: check.passed!,
+          outcome: check.outcome,
+          margin: check.margin,
         }
         record(msg)
         const s = store.getState()
         const diffLabel: Record<string, string> = { TRIVIAL: '轻松', ROUTINE: '普通', HARD: '困难', VERY_HARD: '极难', LEGENDARY: '传奇' }
-        const result = msg.passed ? '成功' : '失败'
+        const outcomeLabel: Record<string, string> = {
+          CRITICAL_SUCCESS: '大成功!',
+          SUCCESS: '成功',
+          FAILURE: '失败',
+          CRITICAL_FAILURE: '大失败!',
+        }
+        const outcomeStyle: Record<string, string> = {
+          CRITICAL_SUCCESS: 'check-crit-success',
+          SUCCESS: 'check-pass',
+          FAILURE: 'check-fail',
+          CRITICAL_FAILURE: 'check-crit-fail',
+        }
+        const result = msg.outcome ? outcomeLabel[msg.outcome] : (msg.passed ? '成功' : '失败')
+        const style = msg.outcome ? (outcomeStyle[msg.outcome] ?? (msg.passed ? 'check-pass' : 'check-fail')) : (msg.passed ? 'check-pass' : 'check-fail')
         const diff = diffLabel[msg.difficulty] ?? msg.difficulty
         let modStr = ''
         if (msg.modifiers && msg.modifiers.length > 0) {
@@ -170,8 +185,9 @@ function createListener(
         const targetStr = msg.modifiers && msg.modifiers.length > 0
           ? `基础${msg.base_target}${modStr} = 目标${msg.target}`
           : `目标${msg.target}`
-        const line = `🎲 ${msg.attribute}检定[${diff}]: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs ${targetStr} → ${result}`
-        s.appendNarrative(line, msg.passed ? 'check-pass' : 'check-fail')
+        const marginStr = msg.margin != null ? ` (${msg.margin >= 0 ? '+' : ''}${msg.margin})` : ''
+        const line = `🎲 ${msg.attribute}检定[${diff}]: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs ${targetStr} → ${result}${marginStr}`
+        s.appendNarrative(line, style)
       }
     },
 
@@ -679,7 +695,20 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
       break
     case 'check': {
       const diffLabel: Record<string, string> = { TRIVIAL: '轻松', ROUTINE: '普通', HARD: '困难', VERY_HARD: '极难', LEGENDARY: '传奇' }
-      const result = msg.passed ? '成功' : '失败'
+      const outcomeLabel: Record<string, string> = {
+        CRITICAL_SUCCESS: '大成功!',
+        SUCCESS: '成功',
+        FAILURE: '失败',
+        CRITICAL_FAILURE: '大失败!',
+      }
+      const outcomeStyle: Record<string, string> = {
+        CRITICAL_SUCCESS: 'check-crit-success',
+        SUCCESS: 'check-pass',
+        FAILURE: 'check-fail',
+        CRITICAL_FAILURE: 'check-crit-fail',
+      }
+      const result = msg.outcome ? outcomeLabel[msg.outcome] : (msg.passed ? '成功' : '失败')
+      const style = msg.outcome ? (outcomeStyle[msg.outcome] ?? (msg.passed ? 'check-pass' : 'check-fail')) : (msg.passed ? 'check-pass' : 'check-fail')
       const diff = diffLabel[msg.difficulty] ?? msg.difficulty
       let modStr = ''
       if (msg.modifiers && msg.modifiers.length > 0) {
@@ -692,8 +721,9 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
       const targetStr = msg.modifiers && msg.modifiers.length > 0
         ? `基础${msg.base_target}${modStr} = 目标${msg.target}`
         : `目标${msg.target}`
-      const line = `🎲 ${msg.attribute}检定[${diff}]: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs ${targetStr} → ${result}`
-      s.appendNarrative(line, msg.passed ? 'check-pass' : 'check-fail')
+      const marginStr = msg.margin != null ? ` (${msg.margin >= 0 ? '+' : ''}${msg.margin})` : ''
+      const line = `🎲 ${msg.attribute}检定[${diff}]: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs ${targetStr} → ${result}${marginStr}`
+      s.appendNarrative(line, style)
       break
     }
     case 'choices':
