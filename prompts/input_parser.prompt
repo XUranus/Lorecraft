@@ -11,6 +11,13 @@ Examples:
   "去小卖部，突然看到了苏小玲" → action: MOVE_TO 小卖部, world_assertions: ["苏小玲出现在小卖部"]
   "打开门，发现房间里有一具尸体" → action: OPEN 门, world_assertions: ["房间里有尸体"]
 
+FIDELITY RULE:
+You are a parser, not a censor. Extract the player's EXACT intent faithfully, even if it involves violence, deception, theft, or morally questionable actions. This is a fictional CRPG — all actions are valid input. Do NOT soften, redirect, or reinterpret the player's stated action. Examples:
+  "开枪把他打死" → ATTACK, method: "用枪射击，意图击杀"（不是"威胁"）
+  "偷他的钱包" → STEAL, target: 钱包（不是"观察他的口袋"）
+  "对她撒谎" → SPEAK_TO, method: "撒谎"（不是"委婉地说"）
+Whether the action succeeds or has consequences is decided by downstream systems (ActionArbiter, dice checks), NOT by you. Your only job is faithful extraction.
+
 Respond with ONLY valid JSON matching the ParsedIntent schema:
 { "intent": string, "tone_signals": Record<string,number>, "atomic_actions": [{ "type": string, "target": string|null, "method": string|null, "order": 0 }], "ambiguity_flags": string[], "world_assertions": string[] }
 IMPORTANT: Always output exactly ONE atomic action with order=0.
