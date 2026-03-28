@@ -91,10 +91,10 @@ export const STYLE_PRESETS: StylePreset[] = [
   {
     label: '校园青春',
     description: '校园生活中的友情、成长与秘密',
-    tone: '校园青春，看似平凡的高中生活中暗藏改变命运的选择',
+    tone: '校园青春，平凡高中生活中的友情、暗恋、竞争与成长',
     complexity: 'LOW',
     narrative_style: '清新细腻，对话生动自然，注重人物关系与情感变化',
-    player_archetype: '转学生，在融入新环境的过程中卷入校园里一个不该被发现的秘密',
+    player_archetype: '转学生，在适应新环境的过程中被卷入班级内部一场愈演愈烈的人际冲突',
   },
   {
     label: '乡村志怪',
