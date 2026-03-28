@@ -51,8 +51,8 @@ export const TierANPCDefinitionSchema = z.object({
   name: z.string(),
   background: z.string(),
   surface_motivation: z.string(),
-  deep_motivation: z.string(),
-  secrets: z.array(z.string()),
+  deep_motivation: z.string().optional(),
+  secrets: z.array(z.string()).optional().default([]),
   initial_relationships: z.record(z.string(), z.string()),
 })
 
@@ -94,21 +94,21 @@ export const GenesisDocumentSchema = z.object({
   world_setting: z.object({
     background: z.string(),
     tone: z.string(),
-    core_conflict: z.string(),
-    hidden_secrets: z.array(z.string()),
-    factions: z.array(FactionDefinitionSchema),
+    core_conflict: z.string().optional(),
+    hidden_secrets: z.array(z.string()).optional().default([]),
+    factions: z.array(FactionDefinitionSchema).optional().default([]),
   }),
 
   narrative_structure: z.object({
-    final_goal_description: z.string(),
+    final_goal_description: z.string().optional(),
     inciting_event: IncitingEventSchema,
     phases: z.array(NarrativePhaseSchema).min(1),
   }),
 
   characters: z.object({
     player_character: PlayerCharacterDefinitionSchema,
-    tier_a_npcs: z.array(TierANPCDefinitionSchema).min(3).max(7),
-    tier_b_npcs: z.array(TierBNPCDefinitionSchema),
+    tier_a_npcs: z.array(TierANPCDefinitionSchema).min(1).max(7),
+    tier_b_npcs: z.array(TierBNPCDefinitionSchema).optional().default([]),
   }),
 
   initial_locations: z.array(LocationDefinitionSchema).min(1),

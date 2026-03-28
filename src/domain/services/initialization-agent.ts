@@ -115,16 +115,16 @@ export class InitializationAgent {
       '  "world_setting": {',
       '    "background": "string - 世界背景概述（仅限玩家可知的公共信息，禁止透露 hidden_secrets 的内容）",',
       '    "tone": "string - 叙事基调",',
-      '    "core_conflict": "string - 核心冲突（GM层面，玩家不直接看到）",',
-      '    "hidden_secrets": ["string array - 隐藏真相，玩家需通过游玩发现"],',
-      '    "factions": [{ "id": "string", "name": "string", "description": "string",',
+      '    "core_conflict": "string（可选）- 核心冲突（GM层面）。日常/轻松类剧本可省略",',
+      '    "hidden_secrets": ["string array（可选，默认[]）- 隐藏真相，玩家需通过游玩发现"],',
+      '    "factions": [（可选，默认[]）{ "id": "string", "name": "string", "description": "string",',
       '      "initial_strength": "WEAK"|"MODERATE"|"STRONG"|"DOMINANT",',
       '      "initial_resources": "string",',
       '      "initial_relationships": { "other_faction_id": { "relation_type": "ALLIED"|"NEUTRAL"|"HOSTILE"|"UNKNOWN", "description": "string" } }',
       '    }]',
       '  },',
       '  "narrative_structure": {',
-      '    "final_goal_description": "string - 最终目标（GM层面）",',
+      '    "final_goal_description": "string（可选）- 最终目标（GM层面）。日常类剧本可省略",',
       '    "inciting_event": {',
       '      "title": "string",',
       '      "description": "string - GM层面的事件描述",',
@@ -138,11 +138,11 @@ export class InitializationAgent {
       '    "player_character": { "id": "string", "name": "string", "background": "string - 仅写角色自己知道的事" },',
       '    "tier_a_npcs": [{ "id": "string", "name": "string", "background": "string",',
       '      "surface_motivation": "string - 表面动机（玩家可观察到的）",',
-      '      "deep_motivation": "string - 深层动机（需要深入了解才能发现）",',
-      '      "secrets": ["string array - 隐藏秘密"],',
+      '      "deep_motivation": "string（可选）- 深层动机。表里如一的角色可省略",',
+      '      "secrets": ["string array（可选，默认[]）- 隐藏秘密"],',
       '      "initial_relationships": { "other_npc_id": "string description" }',
       '    }],',
-      '    "tier_b_npcs": [{ "id": "string", "name": "string", "background": "string", "role_description": "string" }]',
+      '    "tier_b_npcs": [（可选，默认[]）{ "id": "string", "name": "string", "background": "string", "role_description": "string" }]',
       '  },',
       '  "initial_locations": [{ "id": "string", "name": "string", "region_id": "string",',
       '    "description": "string", "initial_status": "string",',
@@ -155,8 +155,7 @@ export class InitializationAgent {
       '关键规则:',
       '- 顶层不要包含 "id" 或 "created_at"（自动生成）',
       '- 枚举值必须大写',
-      '- tier_a_npcs: 3-7个，每个必须有 initial_relationships 引用其他NPC的id',
-      '- 如果 NPC A 引用了 NPC B，NPC B 也必须引用回 NPC A',
+      '- tier_a_npcs: 1-7个，每个必须有 initial_relationships（引用的id必须是实际存在的NPC/玩家id，单向关系允许）',
       '- phases: 至少3个，每个必须有 direction_summary',
       '- initial_locations: 至少3个，彼此有连接关系',
       '- 至少有一个地点的某条连接为 BLOCKED 或 REQUIRES_EVENT',
@@ -196,7 +195,7 @@ export class InitializationAgent {
         if (result.success) {
           const validationErrors = this.validateGenesisConsistency(result.data)
           if (validationErrors.length === 0) {
-            const npcCount = result.data.characters.tier_a_npcs.length + result.data.characters.tier_b_npcs.length
+            const npcCount = result.data.characters.tier_a_npcs.length + (result.data.characters.tier_b_npcs?.length ?? 0)
             const locCount = result.data.initial_locations.length
             this.onProgress(`解析成功: ${npcCount} 个NPC, ${locCount} 个地点, ${result.data.narrative_structure.phases.length} 个叙事阶段`)
             return result.data
@@ -289,8 +288,8 @@ export class InitializationAgent {
     const errors: string[] = []
 
     // Check Tier A NPC count
-    if (doc.characters.tier_a_npcs.length < 3 || doc.characters.tier_a_npcs.length > 7) {
-      errors.push(`tier_a_npcs count ${doc.characters.tier_a_npcs.length} not in [3,7]`)
+    if (doc.characters.tier_a_npcs.length < 1 || doc.characters.tier_a_npcs.length > 7) {
+      errors.push(`tier_a_npcs count ${doc.characters.tier_a_npcs.length} not in [1,7]`)
     }
 
     // Check narrative phases non-empty
@@ -305,15 +304,16 @@ export class InitializationAgent {
       }
     }
 
-    // Check NPC relationship consistency
-    const npcIds = new Set(doc.characters.tier_a_npcs.map((n) => n.id))
+    // Check NPC relationship ID validity (referenced NPC must exist)
+    const allNpcIds = new Set([
+      ...doc.characters.tier_a_npcs.map((n) => n.id),
+      ...(doc.characters.tier_b_npcs ?? []).map((n) => n.id),
+      doc.characters.player_character.id,
+    ])
     for (const npc of doc.characters.tier_a_npcs) {
       for (const refId of Object.keys(npc.initial_relationships)) {
-        if (npcIds.has(refId)) {
-          const refNpc = doc.characters.tier_a_npcs.find((n) => n.id === refId)
-          if (refNpc && !(npc.id in refNpc.initial_relationships)) {
-            errors.push(`NPC ${npc.id} references ${refId} but ${refId} doesn't reference back`)
-          }
+        if (!allNpcIds.has(refId)) {
+          errors.push(`NPC ${npc.id} references unknown ID "${refId}"`)
         }
       }
     }
@@ -344,7 +344,9 @@ export class InitializationAgent {
     // World setting as lore
     const worldLore: LoreEntry = {
       id: uuid(),
-      content: `${doc.world_setting.background}\n核心冲突：${doc.world_setting.core_conflict}`,
+      content: doc.world_setting.core_conflict
+        ? `${doc.world_setting.background}\n核心冲突：${doc.world_setting.core_conflict}`
+        : doc.world_setting.background,
       fact_type: 'WORLD',
       authority_level: 'AUTHOR_PRESET',
       subject_ids: ['world'],
@@ -357,7 +359,7 @@ export class InitializationAgent {
     await this.loreStore.append(worldLore)
 
     // Hidden secrets as lore
-    for (const secret of doc.world_setting.hidden_secrets) {
+    for (const secret of doc.world_setting.hidden_secrets ?? []) {
       await this.loreStore.append({
         id: uuid(),
         content: secret,
@@ -400,7 +402,7 @@ export class InitializationAgent {
     }
 
     // Faction lore
-    for (const faction of doc.world_setting.factions) {
+    for (const faction of doc.world_setting.factions ?? []) {
       await this.loreStore.append({
         id: uuid(),
         content: `${faction.name}：${faction.description}`,
@@ -456,7 +458,7 @@ export class InitializationAgent {
     await this.stateStore.set('world:location_edges', allEdges)
 
     // Faction states
-    for (const faction of doc.world_setting.factions) {
+    for (const faction of doc.world_setting.factions ?? []) {
       const factionState: FactionState = {
         id: faction.id,
         name: faction.name,
@@ -531,7 +533,7 @@ export class InitializationAgent {
     }
 
     // Tier B NPCs
-    for (const npc of doc.characters.tier_b_npcs) {
+    for (const npc of doc.characters.tier_b_npcs ?? []) {
       const state: CharacterDynamicState = {
         npc_id: npc.id,
         tier: 'B',
@@ -556,7 +558,7 @@ export class InitializationAgent {
     for (const npc of doc.characters.tier_a_npcs) {
       nameMap[npc.name] = npc.id
     }
-    for (const npc of doc.characters.tier_b_npcs) {
+    for (const npc of doc.characters.tier_b_npcs ?? []) {
       nameMap[npc.name] = npc.id
     }
     await this.stateStore.set('player:npc_name_map', nameMap)
@@ -566,7 +568,7 @@ export class InitializationAgent {
     // Store phases for NarrativeRailAgent
     await this.stateStore.set('narrative:phases', doc.narrative_structure.phases)
     await this.stateStore.set('narrative:current_phase_index', 0)
-    await this.stateStore.set('narrative:final_goal', doc.narrative_structure.final_goal_description)
+    await this.stateStore.set('narrative:final_goal', doc.narrative_structure.final_goal_description ?? '')
 
     // Map NPCs to phases (simplified: associate all Tier A NPCs with all phases)
     for (const phase of doc.narrative_structure.phases) {
@@ -637,7 +639,7 @@ export class InitializationAgent {
 
     // Create minimal CharacterKnowledge for NPCs in the inciting event
     // Only record that the player encountered them — actual impressions come from gameplay events
-    const allNpcs = [...doc.characters.tier_a_npcs, ...doc.characters.tier_b_npcs]
+    const allNpcs = [...doc.characters.tier_a_npcs, ...(doc.characters.tier_b_npcs ?? [])]
     for (const npcId of inciting.participant_ids) {
       if (npcId === playerId) continue
       const npcDef = allNpcs.find((n) => n.id === npcId)

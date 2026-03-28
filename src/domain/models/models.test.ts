@@ -229,7 +229,6 @@ describe('GenesisDocument Schema', () => {
       characters: {
         player_character: { id: 'player', name: '主角', background: 'test' },
         tier_a_npcs: [
-          { id: 'a1', name: 'NPC1', background: 't', surface_motivation: 't', deep_motivation: 't', secrets: [], initial_relationships: {} },
         ],
         tier_b_npcs: [],
       },
