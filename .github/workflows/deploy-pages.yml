@@ -36,6 +36,7 @@ jobs:
         working-directory: web
         env:
           GITHUB_PAGES: true
+          GIT_HASH: ${{ github.sha }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

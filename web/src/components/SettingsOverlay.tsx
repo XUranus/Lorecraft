@@ -177,6 +177,10 @@ export function SettingsOverlay() {
             </div>
           )}
         </div>
+
+        <div className="settings-build-info">
+          Lorecraft v{__BUILD_VERSION__} · {__GIT_HASH__ === 'dev' ? 'dev' : __GIT_HASH__.slice(0, 7)} · {new Date(__BUILD_TIME__).toLocaleString()}
+        </div>
       </div>
     </div>
   )
