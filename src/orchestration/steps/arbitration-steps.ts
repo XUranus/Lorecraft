@@ -10,6 +10,7 @@ import type { PlayerAttributes } from '../../domain/models/attributes.js'
 import { ATTRIBUTE_IDS, ATTRIBUTE_META } from '../../domain/models/attributes.js'
 import { ActionArbiterOutputSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
+import { parseWithRepair } from '../../ai/parser/json-repair.js'
 import { prompts } from '../../ai/prompt/prompts.js'
 
 // ============================================================
@@ -219,7 +220,12 @@ export class ActionArbiterStep implements IPipelineStep<AtomicAction, AtomicActi
         { agent_type: 'ActionArbiter' },
       )
 
-      const result = this.parser.parse(response.content)
+      const result = await parseWithRepair(
+        this.parser,
+        this.agentRunner,
+        response.content,
+        '{ "passed": boolean, "checks": [{ "dimension": string, "passed": boolean, "reason": string|null }], "drift_flag": boolean, "rejection_narrative": string|null, "needs_check": boolean, "attribute": string|null, "difficulty": string|null, "modifiers": [{ "label": string, "value": number }]|null, "check_reason": string|null }',
+      )
 
       if (!result.success) {
         return {

@@ -11,6 +11,7 @@ import type { PlayerAttributes } from '../../domain/models/attributes.js'
 import { ATTRIBUTE_IDS, ATTRIBUTE_META } from '../../domain/models/attributes.js'
 import { VoiceDebateOutputSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
+import { parseWithRepair } from '../../ai/parser/json-repair.js'
 import { prompts } from '../../ai/prompt/prompts.js'
 
 // ============================================================
@@ -157,7 +158,12 @@ export class VoiceDebateStep implements IPipelineStep<ParsedIntent, ParsedIntent
         { agent_type: 'VoiceDebateGenerator' },
       )
 
-      const result = this.parser.parse(response.content)
+      const result = await parseWithRepair(
+        this.parser,
+        this.agentRunner,
+        response.content,
+        '{ "voices": [{ "trait_id": string, "line": string, "stance": "WARN"|"SUPPORT"|"QUESTION"|"TAUNT" }], "debate_lines": [{ "trait_id": string, "line": string }] }',
+      )
 
       if (!result.success) {
         return {

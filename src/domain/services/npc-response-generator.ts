@@ -2,6 +2,7 @@ import { z } from 'zod/v4'
 import type { AgentRunner } from '../../ai/runner/agent-runner.js'
 import type { LLMMessage } from '../../ai/runner/llm-provider.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
+import { parseWithRepair } from '../../ai/parser/json-repair.js'
 import { prompts } from '../../ai/prompt/prompts.js'
 import type { IStateStore, ILoreStore, ILongTermMemoryStore } from '../../infrastructure/storage/interfaces.js'
 import type { CharacterDynamicState, ConversationHistory, MemoryBuffer, TierCTemplate } from '../models/character.js'
@@ -302,26 +303,16 @@ export class NPCResponseGenerator {
       temperature: 0.7,
     })
 
-    const result = this.parser.parse(response.content)
+    const result = await parseWithRepair(
+      this.parser,
+      this.runner,
+      response.content,
+      '{ "response_text": string, "emotion_change": string|null, "relationship_change_signal": string|null }',
+    )
 
     if (!result.success) {
-      // Retry once with hint
-      const retryHint = this.parser.getRetryHint(result.error)
-      messages.push({ role: 'assistant', content: response.content })
-      messages.push({ role: 'user', content: retryHint })
-
-      const retryResponse = await this.runner.run(messages, {
-        agent_type: agentType,
-        temperature: 0.5,
-      })
-
-      const retryResult = this.parser.parse(retryResponse.content)
-      if (!retryResult.success) {
-        throw new Error(`Failed to parse NPC response after retry: ${retryResult.error.message}`)
-      }
-      return retryResult.data
+      throw new Error(`Failed to parse NPC response after repair: ${result.error.message}`)
     }
-
     return result.data
   }
 

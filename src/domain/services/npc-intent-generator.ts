@@ -2,6 +2,7 @@ import { z } from 'zod/v4'
 import type { AgentRunner } from '../../ai/runner/agent-runner.js'
 import type { LLMMessage } from '../../ai/runner/llm-provider.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
+import { parseWithRepair } from '../../ai/parser/json-repair.js'
 import type { IStateStore } from '../../infrastructure/storage/interfaces.js'
 import type { CharacterDynamicState, MemoryBuffer } from '../models/character.js'
 import { AtomicActionSchema } from '../models/pipeline-io.js'
@@ -113,25 +114,16 @@ export class NPCIntentGenerator {
       temperature: 0.7,
     })
 
-    const result = this.parser.parse(response.content)
+    const result = await parseWithRepair(
+      this.parser,
+      this.runner,
+      response.content,
+      '{ "intent": string, "atomic_actions": [{ "type": string, "target": string|null, "method": string|null, "order": number }] }',
+    )
 
     if (!result.success) {
-      const retryHint = this.parser.getRetryHint(result.error)
-      messages.push({ role: 'assistant', content: response.content })
-      messages.push({ role: 'user', content: retryHint })
-
-      const retryResponse = await this.runner.run(messages, {
-        agent_type: 'npc_intent_generator',
-        temperature: 0.5,
-      })
-
-      const retryResult = this.parser.parse(retryResponse.content)
-      if (!retryResult.success) {
-        throw new Error(`Failed to parse NPC intent after retry: ${retryResult.error.message}`)
-      }
-      return retryResult.data
+      throw new Error(`Failed to parse NPC intent after repair: ${result.error.message}`)
     }
-
     return result.data
   }
 }

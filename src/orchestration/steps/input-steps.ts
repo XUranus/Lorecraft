@@ -8,6 +8,7 @@ import type {
 } from '../../domain/models/pipeline-io.js'
 import { ParsedIntentSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
+import { parseWithRepair } from '../../ai/parser/json-repair.js'
 import { prompts } from '../../ai/prompt/prompts.js'
 
 // ============================================================
@@ -89,7 +90,12 @@ export class InputParserStep implements IPipelineStep<string, ParsedIntent> {
         { agent_type: 'InputParser' },
       )
 
-      const result = this.parser.parse(response.content)
+      const result = await parseWithRepair(
+        this.parser,
+        this.agentRunner,
+        response.content,
+        '{ "intent": string, "tone_signals": { [key]: number }, "atomic_actions": [{ "type": string, "target": string|null, "method": string|null, "order": number }], "ambiguity_flags": string[], "world_assertions": string[] }',
+      )
 
       if (!result.success) {
         return {

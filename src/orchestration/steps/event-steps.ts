@@ -10,6 +10,7 @@ import type { Event } from '../../domain/models/event.js'
 import type { SignalProcessor } from '../../domain/services/signal-processor.js'
 import { EventGeneratorOutputSchema, SignalBOutputSchema } from '../../domain/models/pipeline-io.js'
 import { ResponseParser } from '../../ai/parser/response-parser.js'
+import { parseWithRepair } from '../../ai/parser/json-repair.js'
 import { prompts } from '../../ai/prompt/prompts.js'
 import { z } from 'zod/v4'
 import { uuid } from '../../utils/uuid.js'
@@ -203,7 +204,12 @@ export class EventGeneratorStep
         { agent_type: 'EventGenerator' },
       )
 
-      const result = this.parser.parse(response.content)
+      const result = await parseWithRepair(
+        this.parser,
+        this.agentRunner,
+        response.content,
+        '{ "title": string, "tags": string[], "weight": "PRIVATE"|"MINOR"|"SIGNIFICANT"|"MAJOR", "summary": string, "context": string, "narrative_text": string, "state_changes": [{ "target": string, "field": string, "change_description": string }], "character_observations": [{ "npc_name": string, "observation": string, "relationship_hint"?: string }], "choices": [{ "text": string, "check": { "attribute_id": string, "difficulty": "TRIVIAL"|"ROUTINE"|"HARD"|"VERY_HARD"|"LEGENDARY" }|null }] }',
+      )
 
       if (!result.success) {
         return {
