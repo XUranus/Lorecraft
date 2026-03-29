@@ -34,80 +34,31 @@
 .title-bar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
-.settings-wrapper {
-  position: relative;
-}
-
-.settings-btn {
+.titlebar-action {
   background: none;
   border: none;
   color: var(--fg-muted);
-  font-size: 15px;
+  font-family: var(--font-ui);
+  font-size: 12px;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 4px 8px;
   line-height: 1;
   border-radius: var(--radius-sm);
   transition: color var(--duration-fast), background var(--duration-fast);
 }
 
-.settings-btn:hover {
+.titlebar-action:hover {
   color: var(--fg);
   background: var(--bg-hover);
 }
 
-.settings-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  min-width: 140px;
-  padding: 4px;
-  z-index: 50;
-  box-shadow: var(--shadow-dropdown);
-  animation: scaleIn var(--duration-fast) var(--ease-out);
-  transform-origin: top right;
-}
-
-.menu-item {
-  display: block;
-  width: 100%;
-  padding: 8px 14px;
-  background: none;
-  border: none;
-  color: var(--fg);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-fast), color var(--duration-fast);
-}
-
-.menu-item:hover {
-  background: var(--bg-hover);
-}
-
-.menu-item.danger {
+.titlebar-action.confirm {
   color: var(--error);
 }
 
-.menu-item.danger:hover {
+.titlebar-action.confirm:hover {
   background: rgba(184, 74, 74, 0.1);
 }
-
-.conn-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--fg-muted);
-  flex-shrink: 0;
-}
-
-.conn-dot.connected { background: var(--system); }
-.conn-dot.connecting { background: var(--warn); animation: pulse 1.5s infinite; }
-.conn-dot.disconnected { background: var(--error); }

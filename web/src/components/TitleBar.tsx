@@ -3,80 +3,51 @@ import { useGameStore } from '../stores/useGameStore'
 import './TitleBar.css'
 
 export function TitleBar() {
-  const status = useGameStore((s) => s.connectionStatus)
   const send = useGameStore((s) => s.send)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [confirmReset, setConfirmReset] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const turn = useGameStore((s) => s.turn)
+  const [confirmNew, setConfirmNew] = useState(false)
+  const confirmRef = useRef<HTMLButtonElement>(null)
 
-  // Close menu on outside click
+  // Cancel confirm on outside click
   useEffect(() => {
-    if (!menuOpen) return
+    if (!confirmNew) return
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-        setConfirmReset(false)
+      if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) {
+        setConfirmNew(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [menuOpen])
-
-  function handleReset() {
-    if (!confirmReset) {
-      setConfirmReset(true)
-      return
-    }
-    send({ type: 'reset' })
-    setMenuOpen(false)
-    setConfirmReset(false)
-  }
-
-  function handleSave() {
-    send({ type: 'save' })
-    setMenuOpen(false)
-  }
+  }, [confirmNew])
 
   function handleSessions() {
     send({ type: 'list_sessions' })
-    setMenuOpen(false)
   }
 
   function handleNewGame() {
+    const hasActiveGame = turn > 0
+    if (hasActiveGame && !confirmNew) {
+      setConfirmNew(true)
+      return
+    }
     send({ type: 'new_game' })
-    setMenuOpen(false)
+    setConfirmNew(false)
   }
 
   return (
     <header className="title-bar">
       <span className="title-logo">&#9876; LORECRAFT</span>
       <div className="title-bar-right">
-        <div className="settings-wrapper" ref={menuRef}>
-          <button
-            className="settings-btn"
-            onClick={() => { setMenuOpen(!menuOpen); setConfirmReset(false) }}
-            title="菜单"
-          >
-            &#9881;
-          </button>
-          {menuOpen && (
-            <div className="settings-menu">
-              <button className="menu-item" onClick={handleNewGame}>
-                新游戏
-              </button>
-              <button className="menu-item" onClick={handleSave}>
-                存档
-              </button>
-              <button className="menu-item" onClick={handleSessions}>
-                存档管理
-              </button>
-              <button className="menu-item danger" onClick={handleReset}>
-                {confirmReset ? '确认重置？' : '重置游戏'}
-              </button>
-            </div>
-          )}
-        </div>
-        <span className={`conn-dot ${status}`} title={status} />
+        <button className="titlebar-action" onClick={handleSessions}>
+          存档管理
+        </button>
+        <button
+          ref={confirmRef}
+          className={`titlebar-action${confirmNew ? ' confirm' : ''}`}
+          onClick={handleNewGame}
+        >
+          {confirmNew ? '确认新游戏？' : '新游戏'}
+        </button>
       </div>
     </header>
   )
