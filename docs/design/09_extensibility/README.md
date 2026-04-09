@@ -62,7 +62,7 @@
 ```
 注入位置：所有叙事生成 Agent 的 [WORLD_CONTEXT] 尾部
 配置方式：style_config.narrative_style 字符串
-影响范围：EventGenerator、RejectionNarrativeGenerator、NPCResponseGenerator 的输出风格
+影响范围：EventGeneratorStep、ActionArbiterStep 拒绝叙事、NPC 响应的输出风格
 ```
 
 ### 6. AUTHOR_PRESET Lore 写入接口
@@ -89,7 +89,7 @@ type AuthorLoreInput = {
 
 | 不可变项 | 原因 |
 |---------|------|
-| 五层仲裁结构（层的顺序和存在）| 结构决定信息隔离正确性 |
+| 四阶段管线结构（输入→反思→仲裁→事件）| 结构决定信息隔离正确性 |
 | 事件不可变原则 | 世界历史的一致性依赖于此 |
 | 阻塞式错误处理 | 防止部分失败状态累积 |
 | 主客观记忆命名空间隔离 | 信息不对称是设计意图，污染会破坏 NPC 行为逻辑 |

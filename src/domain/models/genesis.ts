@@ -53,7 +53,10 @@ export const TierANPCDefinitionSchema = z.object({
   surface_motivation: z.string(),
   deep_motivation: z.string().optional(),
   secrets: z.array(z.string()).optional().default([]),
-  initial_relationships: z.record(z.string(), z.string()),
+  initial_relationships: z.record(z.string(), z.union([
+    z.string(),
+    z.object({ relation_type: z.string(), description: z.string() }),
+  ]).transform((v) => typeof v === 'string' ? v : `${v.relation_type}: ${v.description}`)),
 })
 
 export type TierANPCDefinition = z.infer<typeof TierANPCDefinitionSchema>

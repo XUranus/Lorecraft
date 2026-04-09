@@ -340,9 +340,16 @@ async function handleMessage(
           store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API，才能开始游戏。', 'system')
           return
         }
-        if (initializedRef.current || initializingRef.current) {
-          store.getState().appendNarrative('[错误] 游戏已在进行中，请先重置', 'error')
+        if (initializingRef.current) {
+          store.getState().appendNarrative('[提示] 正在初始化中，请稍候…', 'system')
           return
+        }
+        // Reset current game if one is active
+        if (initializedRef.current) {
+          engine.reset()
+          initializedRef.current = false
+          sessionMessagesRef.current = []
+          store.getState().resetGame()
         }
         await engine.initialize()
         break

@@ -34,43 +34,19 @@
 - Lore 固化：一致性验证的规则逻辑
 - NPC 层级管理：升降级逻辑
 
-**关键约束**：Domain 层通过以下接口调用 AI 层，不直接依赖 LLM 实现。
+**关键约束**：Domain 层通过 `AgentRunner` 接口调用 AI 层，不直接依赖 LLM 实现。
 语义判断的"裁决"由 AI 层返回，Domain 层只处理裁决结果的业务逻辑。
 
-```typescript
-// Domain→AI 接口定义（AI 层实现，Domain 层调用）
-interface IInputParserAI {
-  parse(raw_text: string, context: InputParserContext) → ParsedIntent
-}
-interface IArbitrationAI {
-  judgeFeasibility(action: AtomicAction, layer: number, context: string) → FeasibilityVerdict
-  generateRejectionNarrative(action: AtomicAction, strategy: RejectionStrategy, context: string) → NarrativeText
-}
-interface IReflectionAI {
-  generateVoices(traits: ActiveTrait[], intent: string, context: string) → VoiceOutput
-  generateDebate(voices: VoiceLine[], intent: string) → DebateLine[]
-}
-interface IEventAI {
-  generateEvent(action: AtomicAction, context: EventGenContext) → GeneratedEvent
-  tagSignalB(event_summary: string, choice: string) → ChoiceSignals
-}
-interface INPCResponseAI {
-  generateResponse(npc_state: NPCContext, conversation: ConversationTurn[]) → NPCResponse
-  generateSubjectiveMemory(event_summary: string, npc_context: NPCContext) → SubjectiveMemory
-  generateIntent(npc_state: NPCContext) → ParsedIntent
-}
-interface IWorldAI {
-  inferLazyEval(location: string, frozen_state: string, elapsed: string, events: string[]) → InferredEvents
-}
-interface INarrativeRailAI {
-  assessDrift(narrative_structure: string, recent_events: string[]) → DriftAssessment
-  generateInterventionContent(level: number, context: string) → InterventionContent
-}
-interface ILoreAI {
-  extractFacts(npc_response: string, npc_id: string, existing_lore: string) → ExtractedFact[]
-  checkConsistency(new_fact: string, related_lore: string[]) → ConsistencyResult
-}
-```
+**实际实现**：当前各 Pipeline Step 直接持有 `AgentRunner` 引用，通过 `agentRunner.run(messages, options)` 发起 LLM 调用，由 `ResponseParser` + Zod Schema 解析输出。主要 LLM 调用点包括：
+
+| Pipeline Step | LLM 调用 | Prompt 模板 |
+|--------------|----------|-------------|
+| InputParserStep | 解析意图与原子动作 | `input_parser` |
+| VoiceDebateStep | 生成声音台词与辩论（合并调用） | `voice_debate` |
+| ActionArbiterStep | 五维可行性判定 + 检定参数 | `action_arbiter` |
+| EventGeneratorStep | 生成事件叙事与状态变更 | `event_generator` |
+| QuestTrackingStep | 分析任务图变更 | `quest_tracker` |
+| NarrativeProgressStep | 评估叙事阶段完成度 | `narrative_progress_assessor` |
 
 **包含**：`ArbitrationService`、`SignalProcessor`、`NarrativeRailService`、`LoreCanonicalizer`、`NPCTierManager`
 
@@ -100,8 +76,8 @@ INPCResponseAI.generate(npc_state, conversation_context) → NPCResponse
 **职责**：存储与检索，不含任何业务逻辑。
 - `EventStore`：事件不可变存储（追加写）
 - `StateStore`：世界状态与角色状态的 KV 存储
-- `VectorStore`：Tier 2 摘要和 Lore 的向量索引
 - `LoreStore`：Lore 条目与因果链的结构化存储
+- `LongTermMemoryStore`：被驱逐的长期记忆条目
 - `SessionStore`：存档与创世文档的持久化
 
 **包含**：以上各 Store 及其对应接口定义
@@ -133,7 +109,7 @@ Orchestration → Infrastructure 直接调用（写入事件、更新状态）
 | MainPipeline | Orchestration | 流程编排 |
 | EventBus | Orchestration | 异步广播 |
 | AgentScheduler | Orchestration | NPC 自主行动调度 |
-| ArbitrationService | Domain | 五层检查的业务规则 |
+| ArbitrationService | Domain | 五维可行性判定 + 属性检定 |
 | SignalProcessor | Domain | 权重数值计算 |
 | NarrativeRailService | Domain | 干预路由决策 |
 | LoreCanonicalizer | Domain | 一致性验证规则 |
@@ -144,5 +120,6 @@ Orchestration → Infrastructure 直接调用（写入事件、更新状态）
 | PromptRegistry | AI | Prompt 模板管理 |
 | EventStore | Infrastructure | 事件持久化 |
 | StateStore | Infrastructure | 状态 KV 存储 |
-| VectorStore | Infrastructure | 向量检索 |
 | LoreStore | Infrastructure | Lore 结构化存储 |
+| LongTermMemoryStore | Infrastructure | 长期记忆存储 |
+| SessionStore | Infrastructure | 存档持久化 |

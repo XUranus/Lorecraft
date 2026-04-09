@@ -38,23 +38,43 @@ type PipelineContext = {
 
 ## 主链步骤序列
 
+当前实现为四阶段共 23 个 `IPipelineStep`，由 `GameLoop.buildMainPipeline()` 组装：
+
 ```
 PlayerInput
     ↓
-Step 1: InputPipeline
-  解析意图 → 生成原子动作序列
+输入阶段（5 步）
+  1. ValidationStep         — 非空、长度检查
+  2. InputParserStep        — LLM 解析意图、语气信号、原子动作
+  3. WorldAssertionFilterStep — 分离世界断言
+  4. ActionValidationStep   — 验证动作类型与排序
+  5. ToneSignalStep         — 语气信号写入上下文
     ↓
-Step 2: ReflectionPipeline
-  评估意图 → 可选：内心声音输出
-  [短路条件] 拦截时 → 返回声音文本，等待玩家确认
+反思阶段（6 步）
+  6. ActiveTraitStep        — 加载活跃特质（属性值 > 阈值）
+  7. InjectionReadStep      — 读取叙事轨道注入队列
+  8. ShouldSpeakStep        — 判定声音是否发言
+  9. VoiceDebateStep        — LLM 生成声音台词与辩论
+  10. InsistenceStep         — 坚持状态机（NORMAL → WARNED → INSISTING）
+  11. VoiceWriteStep         — 声音台词写入上下文
+  [短路条件] 声音警告时 → 返回声音文本，等待玩家确认/放弃
     ↓
-Step 3: ArbitrationPipeline
-  四维可行性检查（信息/物理/逻辑/漂移）
+仲裁阶段（3 步）
+  12. FullContextStep       — 并行获取记忆、状态、知识、事件、叙事阶段
+  13. ActionArbiterStep     — LLM 五维可行性判定 + d100 属性检定
+  14. ArbitrationResultStep — 组装 force_flag、drift_flag、检定结果
   [短路条件] 不通过 → 返回叙事拒绝文本
     ↓
-Step 4: EventPipeline
-  生成事件 → 写入存储 → 广播
-  返回 Tier 4 叙事文本
+事件阶段（9 步）
+  15. PacingStep             — 规则驱动节奏判断（非 LLM）
+  16. EventGeneratorStep     — LLM 生成叙事、NPC 反应、状态变更、选项
+  17. EventSchemaValidationStep — 验证输出结构
+  18. EventIdStep            — 生成 UUID
+  19. EventWriteStep         — 写入 EventStore（Tier 1-4）
+  20. StateWritebackStep     — 更新主观记忆、客观状态、角色知识
+  21. QuestTrackingStep      — LLM 分析任务图变更（非关键，失败静默跳过）
+  22. NarrativeProgressStep  — 检查阶段完成度，推进叙事阶段
+  23. EventBroadcastStep     — 输出叙事文本与选项
     ↓
 NarrativeOutput → Interface Layer
 ```

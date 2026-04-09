@@ -68,8 +68,10 @@
 
 ## 反思系统
 
-### `TraitVoiceGenerator`
-**触发方**：ReflectionPipeline Step 4
+### `VoiceDebate`（合并调用）
+**触发方**：VoiceDebateStep（反思阶段 Step 4）
+**说明**：原先的 TraitVoiceGenerator 和 DebateGenerator 已合并为单次 LLM 调用
+**Prompt**：`voice_debate`
 **输入**：
 ```json
 {
@@ -85,28 +87,8 @@
 ```json
 {
   "voices": [
-    {
-      "trait_id": "string",
-      "line": "string",
-      "stance": "WARN | SUPPORT | QUESTION | TAUNT"
-    }
+    { "trait_id": "string", "line": "string" }
   ],
-  "debate_needed": false
-}
-```
-
-### `DebateGenerator`
-**触发方**：ReflectionPipeline Step 5（仅当 `debate_needed: true`）
-**输入**：
-```json
-{
-  "voices": ["...voice objects..."],
-  "intent_summary": "string"
-}
-```
-**输出**：
-```json
-{
   "debate_lines": [
     { "trait_id": "string", "line": "string" }
   ]
@@ -117,62 +99,63 @@
 
 ## 仲裁层
 
-### `NarrativeFeasibilityJudge`
-**触发方**：ArbitrationService（Layer 1、3、4、5）
+### `ActionArbiter`（合并调用）
+**触发方**：ActionArbiterStep（仲裁阶段 Step 2）
+**说明**：原先的 NarrativeFeasibilityJudge 和 RejectionNarrativeGenerator 已合并为单次 LLM 调用，同时包含属性检定判断
+**Prompt**：`action_arbiter`
 **输入**：
 ```json
 {
-  "action": { "...action object..." },
-  "check_layer": 1,
-  "relevant_context": "string",
-  "character_subjective_memory_snippets": ["string"]
+  "action": { "type": "string", "target": "string | null", "method": "string | null" },
+  "subjective_memory": { "..." },
+  "objective_world_state": { "..." },
+  "lore_context": ["..."],
+  "recent_events": ["..."],
+  "narrative_direction": "string",
+  "world_tone": "string"
 }
 ```
 **输出**：
 ```json
 {
   "passed": true,
-  "failure_reason": "string | null",
-  "rejection_strategy": "NARRATIVE_ABSORB | PARTIAL_EXEC | REINTERPRET | null"
+  "checks": [
+    { "dimension": "string", "passed": true, "reason": "string | null" }
+  ],
+  "drift_flag": false,
+  "rejection_narrative": "string | null",
+  "needs_check": false,
+  "attribute": "string | null",
+  "difficulty": "TRIVIAL | ROUTINE | HARD | VERY_HARD | LEGENDARY | null",
+  "modifiers": [{ "label": "string", "value": 0 }],
+  "check_reason": "string | null"
 }
 ```
-
-### `RejectionNarrativeGenerator`
-**触发方**：ArbitrationService（仲裁不通过时）
-**输入**：
-```json
-{
-  "action": { "...action object..." },
-  "failure_layer": 1,
-  "rejection_strategy": "string",
-  "character_state_summary": "string",
-  "scene_context": "string"
-}
-```
-**输出**：
-```json
-{
-  "narrative_text": "string"
-}
-```
+d100 属性检定由代码执行（非 LLM），LLM 仅判断是否需要检定及其参数。
 
 ---
 
 ## 事件 Agent
 
 ### `EventGenerator`
-**触发方**：EventPipeline Step 3
+**触发方**：EventGeneratorStep（事件阶段 Step 2）
+**Prompt**：`event_generator`
 **输入**：
 ```json
 {
   "action": { "...action object..." },
   "force_flag": false,
   "force_level": 0,
+  "world_tone": "string",
   "world_state_summary": "string",
   "participants_state": [
     { "npc_id": "string", "state_summary": "string" }
   ],
-  "recent_relevant_events": ["string"]
+  "recent_narrative": ["string"],
+  "known_facts": ["string"],
+  "attribute_check": { "needed": true, "passed": true, "..." },
+  "narrative_direction": "string",
+  "beat_plan": "string | null"
 }
 ```
 **输出**：
@@ -186,19 +169,45 @@
   "narrative_text": "string",
   "state_changes": [
     { "target": "string", "field": "string", "change_description": "string" }
+  ],
+  "character_observations": [
+    { "npc_name": "string", "observation": "string", "relationship_hint": "string | null" }
+  ],
+  "choices": [
+    { "text": "string", "check": { "attribute_id": "string", "difficulty": "string" } | null }
   ]
 }
 ```
+每次固定生成 2 个后续选项。character_observations 用于更新玩家对 NPC 的认知。
 
-### `SignalBTagger`
-**触发方**：EventPipeline Step 6
+### `QuestTracker`
+**触发方**：QuestTrackingStep（事件阶段 Step 7，非关键）
+**Prompt**：`quest_tracker`
 **输入**：
 ```json
 {
-  "event_summary": "string",
-  "choice_description": "string"
+  "event": { "title": "string", "summary": "string", "tags": ["string"], "narrative_text": "string", "state_changes": ["..."] },
+  "current_quest_graph": { "quests": ["..."], "nodes": ["..."], "edges": ["..."] },
+  "turn": 0
 }
 ```
+**输出**：
+```json
+{
+  "new_quests": [{ "id": "string", "title": "string" }],
+  "new_nodes": [{ "id": "string", "quest_id": "string", "summary": "string", "hint": "string" }],
+  "new_edges": [{ "from_node_id": "string", "to_node_id": "string" }],
+  "completed_nodes": ["node_id"],
+  "failed_nodes": ["node_id"],
+  "completed_quests": ["quest_id"],
+  "failed_quests": ["quest_id"]
+}
+```
+大多数回合输出空 delta。失败时静默跳过，不影响主流程。
+
+### `SignalBTagger`（条件触发，当前未接入主 Pipeline）
+**说明**：代码实现存在（SignalBStep），但当前未添加到 buildMainPipeline() 中
+**Prompt**：`signal_b_tagger`
 **输出**：
 ```json
 {

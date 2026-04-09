@@ -5,45 +5,50 @@
 ```
 输入：raw PlayerInput string
 
-Step 1: 基础校验（代码）
+Step 1: ValidationStep（代码）
   - 非空检查
-  - 长度限制检查
+  - 长度限制检查（过长截断）
   - 输出：通过的原始文本
 
-Step 2: InputParser LLM 调用（AI 层）
-  - ContextAssembler 组装：当前位置、已知 NPC、近期 3 条事件摘要、当前场景
-  - 调用 InputParser（见 input_output_contracts.md）
-  - 输出：ParsedIntent { intent, tone_signals, atomic_actions[], ambiguity_flags[] }
+Step 2: InputParserStep（AI 层）
+  - LLM 解析玩家输入
+  - 输出：ParsedIntent { intent, tone_signals, atomic_actions[], world_wishes[] }
+  - tone_signals 为 0.0–1.0 的情感强度值（sarcasm, hostility, playfulness, romantic, contempt）
 
-Step 3: 消歧处理（条件触发）
-  - 触发条件：ambiguity_flags 非空
-  - 对每个含歧义的 atomic_action 调用 AmbiguityResolver
-  - 将解析结果合并回 atomic_actions[]
+Step 3: WorldAssertionFilterStep（代码，可选）
+  - 受 GameplayOptions.world_assertion 开关控制
+  - 从 parsed_intent 中提取 world_wishes（玩家试图控制世界的断言）
+  - 将 world_wishes 写入上下文供下游参考，但不作为实际行动
 
-Step 4: 原子动作序列验证（代码）
+Step 4: ActionValidationStep（代码）
   - 确保 atomic_actions 非空
-  - 确保每个 action.type 是已知枚举值
   - 按 action.order 排序
+  - 验证动作结构完整性
 
-Step 5: 信号 A 提取写入（代码）
-  - 将 tone_signals 写入 TraitWeightQueue（异步处理，不阻塞）
-  - 不在此步骤直接更新权重，由 ReflectionPipeline Step 7 统一处理
+Step 5: ToneSignalStep（代码）
+  - 将 tone_signals 归一化后写入 PipelineContext
+  - 供反思阶段使用
 
-输出：AtomicActionSequence[]，传入 ReflectionPipeline
+输出：通过 PipelineContext.data 传递 parsed_intent，进入反思阶段
 ```
 
 ---
 
-## 与 ReflectionPipeline 的数据接口
+## 与反思阶段的数据接口
 
 ```
-type InputPipelineOutput = {
-  original_text: string,
+type ParsedIntent = {
   intent: string,
-  tone_signals: ToneSignals,
+  tone_signals: {
+    sarcasm: number,
+    hostility: number,
+    playfulness: number,
+    romantic: number,
+    contempt: number,
+  },
   atomic_actions: AtomicAction[],
-  ambiguity_resolved: boolean
+  world_wishes: string[],
 }
 ```
 
-此对象通过 `PipelineContext` 传递，ReflectionPipeline 直接从 context 中读取。
+此对象通过 `PipelineContext.data.set('parsed_intent', ...)` 传递，后续阶段直接从 context 中读取。
