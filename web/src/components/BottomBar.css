@@ -130,22 +130,34 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 13px;
+  padding: 9px 13px 9px 15px;
   background: transparent;
   border: 1px solid var(--border);
-  border-left: 2px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;
   font-family: var(--font-ui);
   color: var(--fg);
   position: relative;
+  overflow: hidden;
   transition:
     border-color var(--duration-normal) var(--ease-candle),
     background var(--duration-normal) var(--ease-candle),
-    transform var(--duration-normal) var(--ease-candle),
     box-shadow var(--duration-normal) var(--ease-candle);
   animation: pillEnter 0.35s var(--ease-candle) both;
+}
+
+/* Left accent bar as a pseudo element — doesn't touch the box model */
+.suggestion-pill::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--border-subtle);
+  border-radius: 0 1px 1px 0;
+  transition: background var(--duration-normal) var(--ease-candle);
 }
 
 .suggestion-pill:nth-child(1) { animation-delay: 0ms; }
@@ -153,29 +165,22 @@
 .suggestion-pill:nth-child(3) { animation-delay: 160ms; }
 
 @keyframes pillEnter {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-    border-left-color: transparent;
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-    border-left-color: var(--border-subtle);
-  }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .suggestion-pill:hover {
   border-color: var(--border-accent);
-  border-left-color: var(--title);
   background: rgba(196, 149, 106, 0.05);
-  transform: translateX(2px);
   box-shadow: var(--glow-amber-soft);
+}
+
+.suggestion-pill:hover::before {
+  background: var(--title);
 }
 
 .suggestion-pill:active {
   background: rgba(196, 149, 106, 0.1);
-  transform: translateX(2px) scale(0.998);
 }
 
 .pill-key {

@@ -12,6 +12,11 @@
   position: relative;
   cursor: grab;
   touch-action: none;
+  /* Contain paint so pan/zoom repaints don't leave ghost trails
+     from fixed grain/vignette overlays above us. */
+  contain: layout paint;
+  isolation: isolate;
+  background: var(--bg);
 }
 
 .quest-canvas-wrap.grabbing {
@@ -22,6 +27,16 @@
   display: block;
   width: 100%;
   height: 100%;
+  /* Force GPU composite layer for the SVG so its transform
+     updates happen on the compositor, not the main-thread raster. */
+  transform: translateZ(0);
+}
+
+/* The panned group — mark as will-change so Chromium keeps it on
+   its own layer during drags. Without this the foreignObject HTML
+   content inside the group smears on pan. */
+.quest-canvas-wrap svg > g {
+  will-change: transform;
 }
 
 /* ── Edges ── */
