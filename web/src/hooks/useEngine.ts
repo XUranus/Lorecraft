@@ -368,13 +368,14 @@ async function handleMessage(
           store.getState().appendNarrative(t('game:system.initializingHint'), 'system')
           return
         }
-        // Reset current game if one is active
+        // Save current session before starting a new game
         if (initializedRef.current) {
-          engine.reset()
-          initializedRef.current = false
-          sessionMessagesRef.current = []
-          store.getState().resetGame()
+          await engine.saveSessionHistory(sessionMessagesRef.current)
         }
+        engine.resetRuntime()
+        initializedRef.current = false
+        sessionMessagesRef.current = []
+        store.getState().resetGame()
         await engine.initialize()
         break
 
@@ -551,7 +552,11 @@ async function handleMessage(
         break
 
       case 'new_session':
-        engine.reset()
+        // Save current session before starting fresh
+        if (initializedRef.current) {
+          await engine.saveSessionHistory(sessionMessagesRef.current)
+        }
+        engine.resetRuntime()
         initializedRef.current = false
         initializingRef.current = false
         sessionMessagesRef.current = []

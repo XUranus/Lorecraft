@@ -432,14 +432,8 @@ export class GameLoop {
     this.insistenceState = 'NORMAL'
   }
 
-  reset(): void {
-    // Wipe all data and re-acquire adapters
-    this.store.resetAll()
-    this.stateStore = this.store.stateStore
-    this.eventStore = this.store.eventStore
-    this.loreStore = this.store.loreStore
-    this.longTermMemoryStore = this.store.longTermMemoryStore
-    this.sessionStore = this.store.sessionStore
+  /** Clear runtime state only — database is untouched, existing sessions preserved. */
+  resetRuntime(): void {
     this.injectionQueueManager = new InMemoryInjectionQueueManager()
     this.signalProcessor = new SignalProcessor(this.stateStore, this.configLoader.getTraitConfigs())
     this.locationGraph = new LocationGraph([])
@@ -470,6 +464,17 @@ export class GameLoop {
     this.awaitingCharConfirm = false
     this.awaitingStyleSelect = false
     this.selectedStyle = null
+  }
+
+  /** Wipe ALL data (all sessions, all tables) and reset runtime. */
+  reset(): void {
+    this.store.resetAll()
+    this.stateStore = this.store.stateStore
+    this.eventStore = this.store.eventStore
+    this.loreStore = this.store.loreStore
+    this.longTermMemoryStore = this.store.longTermMemoryStore
+    this.sessionStore = this.store.sessionStore
+    this.resetRuntime()
   }
 
   async processInput(playerInput: string, options?: { predeterminedCheck?: { attribute_id: string; difficulty: string } }): Promise<void> {
