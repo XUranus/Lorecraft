@@ -37,5 +37,20 @@
   "error.gameNotInitialized": "【エラー】ゲームが初期化されていません",
   "error.invalidOption": "【エラー】無効なオプション",
   "error.noPendingAction": "【エラー】確認待ちの行動がありません",
-  "error.cannotSwitchSession": "【エラー】そのセーブに切り替えられません"
+  "error.cannotSwitchSession": "【エラー】そのセーブに切り替えられません",
+
+  "init.loadingStyle": "スタイル設定を読み込み中…",
+  "init.callingLLM": "LLMでワールドを生成中…",
+  "init.generatingWorld": "ゲームワールドを生成中…",
+  "init.worldGenerated": "ワールド生成完了 ({{seconds}}秒)",
+  "init.savingGenesis": "創世文書を保存中…",
+  "init.initWorldState": "ワールド状態を初期化中…",
+  "init.generatingInciting": "序幕イベントを生成中…",
+  "init.complete": "初期化完了 (合計 {{seconds}}秒)",
+  "init.llmCall": "LLM呼び出し中… ({{attempt}}/{{maxRetries}} 回目){{lastError}}",
+  "init.llmResponded": "LLM応答 ({{seconds}}秒)、解析中…",
+  "init.parsed": "解析完了: NPC {{npcs}}体, 場所 {{locations}}箇所, 物語フェーズ {{phases}}個",
+  "init.consistencyFailed": "整合性チェック失敗: {{error}}",
+  "init.jsonParseFailed": "JSON解析失敗: {{error}}",
+  "init.callFailed": "呼び出し失敗: {{error}}"
 }

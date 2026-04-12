@@ -23,6 +23,12 @@ import { uuid } from '../../utils/uuid.js'
 // InitializationAgent
 // ============================================================
 
+/** Structured progress message — frontend translates via i18n key */
+export interface ProgressMessage {
+  key: string
+  params?: Record<string, string | number>
+}
+
 export class InitializationAgent {
   private readonly agentRunner: AgentRunner
   private readonly stateStore: IStateStore
@@ -32,7 +38,7 @@ export class InitializationAgent {
   private readonly eventBus: EventBus | null
   private readonly configLoader: ExtensionConfigLoader
   private readonly genesisParser = new ResponseParser(GenesisDocumentSchema)
-  private readonly onProgress: (msg: string) => void
+  private readonly onProgress: (msg: ProgressMessage) => void
   private readonly onStep: (name: string, phase: 'start' | 'end') => void
 
   constructor(deps: {
@@ -43,7 +49,7 @@ export class InitializationAgent {
     loreStore: ILoreStore
     eventBus?: EventBus
     configLoader: ExtensionConfigLoader
-    onProgress?: (msg: string) => void
+    onProgress?: (msg: ProgressMessage) => void
     onStep?: (name: string, phase: 'start' | 'end') => void
   }) {
     this.agentRunner = deps.agentRunner
@@ -66,38 +72,38 @@ export class InitializationAgent {
 
     // Step 1: Load style config
     this.onStep('LoadStyleConfig', 'start')
-    this.onProgress('Loading style config…')
+    this.onProgress({ key: 'init.loadingStyle' })
     const styleConfig = this.configLoader.getStyleConfig()
     this.onStep('LoadStyleConfig', 'end')
 
     // Step 2: Generate GenesisDocument via LLM
     this.onStep('WorldGenerator', 'start')
-    this.onProgress('Calling LLM to generate world…')
+    this.onProgress({ key: 'init.callingLLM' })
     const genesisDoc = await this.generateGenesisDocument(styleConfig)
-    this.onProgress(`World generated (${((Date.now() - t0) / 1000).toFixed(1)}s)`)
+    this.onProgress({ key: 'init.worldGenerated', params: { seconds: ((Date.now() - t0) / 1000).toFixed(1) } })
     this.onStep('WorldGenerator', 'end')
 
     // Step 3: Validation (handled by ResponseParser in step 2)
 
     // Step 4: Persist genesis document
     this.onStep('PersistGenesis', 'start')
-    this.onProgress('Saving genesis document…')
+    this.onProgress({ key: 'init.savingGenesis' })
     await this.sessionStore.saveGenesis(genesisDoc)
     this.onStep('PersistGenesis', 'end')
 
     // Step 5: Distribute to modules (strict ordering)
     this.onStep('DistributeToModules', 'start')
-    this.onProgress('Initializing world state…')
+    this.onProgress({ key: 'init.initWorldState' })
     await this.distributeToModules(genesisDoc)
     this.onStep('DistributeToModules', 'end')
 
     // Step 6: Broadcast inciting event
     this.onStep('BroadcastIncitingEvent', 'start')
-    this.onProgress('Generating inciting event…')
+    this.onProgress({ key: 'init.generatingInciting' })
     await this.broadcastIncitingEvent(genesisDoc)
     this.onStep('BroadcastIncitingEvent', 'end')
 
-    this.onProgress(`Initialization complete (${((Date.now() - t0) / 1000).toFixed(1)}s)`)
+    this.onProgress({ key: 'init.complete', params: { seconds: ((Date.now() - t0) / 1000).toFixed(1) } })
     return genesisDoc
   }
 
@@ -176,7 +182,7 @@ export class InitializationAgent {
     ].join('\n')
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      this.onProgress(`LLM call… (attempt ${attempt + 1}/${maxRetries})${lastError ? ` [last error: ${lastError.slice(0, 120)}]` : ''}`)
+      this.onProgress({ key: 'init.llmCall', params: { attempt: attempt + 1, maxRetries, lastError: lastError ? lastError.slice(0, 120) : '' } })
 
       const systemPrompt = prompts.fill('world_generator', {
         style_config: [
@@ -198,7 +204,7 @@ export class InitializationAgent {
           ],
           { agent_type: 'WorldGenerator' },
         )
-        this.onProgress(`LLM responded (${((Date.now() - callStart) / 1000).toFixed(1)}s), parsing…`)
+        this.onProgress({ key: 'init.llmResponded', params: { seconds: ((Date.now() - callStart) / 1000).toFixed(1) } })
 
         // Pre-process: inject metadata fields and normalize enums
         const preprocessed = this.preprocessLLMOutput(response.content)
@@ -209,18 +215,18 @@ export class InitializationAgent {
           if (validationErrors.length === 0) {
             const npcCount = result.data.characters.tier_a_npcs.length + (result.data.characters.tier_b_npcs?.length ?? 0)
             const locCount = result.data.initial_locations.length
-            this.onProgress(`Parsed: ${npcCount} NPCs, ${locCount} locations, ${result.data.narrative_structure.phases.length} narrative phases`)
+            this.onProgress({ key: 'init.parsed', params: { npcs: npcCount, locations: locCount, phases: result.data.narrative_structure.phases.length } })
             return result.data
           }
           lastError = validationErrors.join('; ')
-          this.onProgress(`Consistency check failed: ${lastError}`)
+          this.onProgress({ key: 'init.consistencyFailed', params: { error: lastError } })
         } else {
           lastError = result.error.message
-          this.onProgress(`JSON parse failed: ${lastError.slice(0, 120)}`)
+          this.onProgress({ key: 'init.jsonParseFailed', params: { error: lastError.slice(0, 120) } })
         }
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err)
-        this.onProgress(`Call failed: ${lastError.slice(0, 120)}`)
+        this.onProgress({ key: 'init.callFailed', params: { error: lastError.slice(0, 120) } })
       }
     }
 

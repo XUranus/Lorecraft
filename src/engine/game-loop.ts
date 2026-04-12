@@ -6,7 +6,7 @@ import type { IStateStore, IEventStore, ILoreStore, ILongTermMemoryStore, ISessi
 import { MainPipeline, PipelineExecutionError, createPipelineContext } from '../orchestration/pipeline/index.js'
 import type { NarrativeOutput, GameplayOptions } from '../orchestration/pipeline/types.js'
 import { DEFAULT_GAMEPLAY_OPTIONS } from '../orchestration/pipeline/types.js'
-import { InitializationAgent } from '../domain/services/initialization-agent.js'
+import { InitializationAgent, type ProgressMessage } from '../domain/services/initialization-agent.js'
 import { SaveLoadSystem } from '../domain/services/save-load-system.js'
 import { ExtensionConfigLoader, STYLE_PRESETS, type StyleConfig } from '../domain/services/extension-config.js'
 import { InMemoryInjectionQueueManager } from '../domain/services/injection-queue-manager.js'
@@ -94,7 +94,7 @@ export interface GameEventListener {
   onError(message: string, retryable?: boolean): void
   onStyleSelect?(presets: Array<{ label: string; description: string }>): void
   onSessionList?(sessions: Array<{ id: string; label: string; turn: number; location: string; updated_at: number }>): void
-  onInitProgress(step: string): void
+  onInitProgress(step: string | ProgressMessage): void
   onInitComplete(doc: GenesisDocument): void
   onCharCreate?(attributes: PlayerAttributes, meta: Array<{ id: string; display_name: string; domain: string }>): void
   onDebugTurnStart?(turn: number, input: string): void
@@ -234,7 +234,7 @@ export class GameLoop {
     this.agentRunner.markTurn(0, '[INITIALIZATION]')
 
     this.configLoader = new ExtensionConfigLoader({ style: this.selectedStyle })
-    this.listener?.onInitProgress('Generating game world…')
+    this.listener?.onInitProgress({ key: 'init.generatingWorld' })
 
     // Emit debug turn 0 for world generation
     this.listener?.onDebugTurnStart?.(0, '[World Generation]')

@@ -37,5 +37,20 @@
   "error.gameNotInitialized": "[Error] Game not initialized",
   "error.invalidOption": "[Error] Invalid option",
   "error.noPendingAction": "[Error] No pending action to confirm",
-  "error.cannotSwitchSession": "[Error] Cannot switch to that save"
+  "error.cannotSwitchSession": "[Error] Cannot switch to that save",
+
+  "init.loadingStyle": "Loading style config…",
+  "init.callingLLM": "Calling LLM to generate world…",
+  "init.generatingWorld": "Generating game world…",
+  "init.worldGenerated": "World generated ({{seconds}}s)",
+  "init.savingGenesis": "Saving genesis document…",
+  "init.initWorldState": "Initializing world state…",
+  "init.generatingInciting": "Generating inciting event…",
+  "init.complete": "Initialization complete ({{seconds}}s)",
+  "init.llmCall": "LLM call… (attempt {{attempt}}/{{maxRetries}}){{lastError}}",
+  "init.llmResponded": "LLM responded ({{seconds}}s), parsing…",
+  "init.parsed": "Parsed: {{npcs}} NPCs, {{locations}} locations, {{phases}} narrative phases",
+  "init.consistencyFailed": "Consistency check failed: {{error}}",
+  "init.jsonParseFailed": "JSON parse failed: {{error}}",
+  "init.callFailed": "Call failed: {{error}}"
 }

@@ -177,8 +177,10 @@ export class AppServer implements GameEventListener {
     this.send({ type: 'error', message, retryable: retryable ?? false })
   }
 
-  onInitProgress(step: string): void {
-    this.send({ type: 'init_progress', step })
+  onInitProgress(step: string | { key: string; params?: Record<string, string | number> }): void {
+    // Server side: resolve structured messages to English fallback
+    const text = typeof step === 'string' ? step : `[${step.key}]${step.params ? ' ' + JSON.stringify(step.params) : ''}`
+    this.send({ type: 'init_progress', step: text })
   }
 
   onInitComplete(doc: GenesisDocument): void {

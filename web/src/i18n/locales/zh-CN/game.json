@@ -37,5 +37,20 @@
   "error.gameNotInitialized": "[错误] 游戏尚未初始化",
   "error.invalidOption": "[错误] 无效的选项",
   "error.noPendingAction": "[错误] 当前没有待确认的行动",
-  "error.cannotSwitchSession": "[错误] 无法切换到该存档"
+  "error.cannotSwitchSession": "[错误] 无法切换到该存档",
+
+  "init.loadingStyle": "正在加载风格配置…",
+  "init.callingLLM": "正在调用大模型生成世界…",
+  "init.generatingWorld": "正在生成游戏世界…",
+  "init.worldGenerated": "世界生成完成 ({{seconds}}s)",
+  "init.savingGenesis": "正在保存创世文档…",
+  "init.initWorldState": "正在初始化世界状态…",
+  "init.generatingInciting": "正在生成序幕事件…",
+  "init.complete": "初始化完成 (总计 {{seconds}}s)",
+  "init.llmCall": "大模型调用中… (第 {{attempt}}/{{maxRetries}} 次尝试){{lastError}}",
+  "init.llmResponded": "大模型返回 ({{seconds}}s)，正在解析…",
+  "init.parsed": "解析成功: {{npcs}} 个NPC, {{locations}} 个地点, {{phases}} 个叙事阶段",
+  "init.consistencyFailed": "一致性检查失败: {{error}}",
+  "init.jsonParseFailed": "JSON解析失败: {{error}}",
+  "init.callFailed": "调用失败: {{error}}"
 }

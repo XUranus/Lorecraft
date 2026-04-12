@@ -255,11 +255,12 @@ function createListener(
       store.getState().setSessionList(sessions)
     },
 
-    onInitProgress(step: string) {
-      record({ type: 'init_progress', step })
+    onInitProgress(step: string | { key: string; params?: Record<string, string | number> }) {
+      const text = typeof step === 'string' ? step : String(t(`game:${step.key}`, step.params as any))
+      record({ type: 'init_progress', step: text })
       const s = store.getState()
-      s.appendNarrative(step, 'system')
-      s.appendInitLog(step)
+      s.appendNarrative(text, 'system')
+      s.appendInitLog(text)
     },
 
     onInitComplete(doc: GenesisDocument) {
