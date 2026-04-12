@@ -1,0 +1,41 @@
+{
+  "difficulty.TRIVIAL": "Trivial",
+  "difficulty.ROUTINE": "Routine",
+  "difficulty.HARD": "Hard",
+  "difficulty.VERY_HARD": "Very Hard",
+  "difficulty.LEGENDARY": "Legendary",
+
+  "outcome.CRITICAL_SUCCESS": "Critical Success!",
+  "outcome.SUCCESS": "Success",
+  "outcome.FAILURE": "Failure",
+  "outcome.CRITICAL_FAILURE": "Critical Failure!",
+
+  "narrative.aside": "[Aside] ",
+  "narrative.prologue": "[Prologue] ",
+  "narrative.playerIntro": "You are {{name}}. {{background}}",
+
+  "system.initFailed": "[Error] Engine initialization failed",
+  "system.initializing": "Initializing, please wait…",
+  "system.initializingHint": "[Hint] Initializing, please wait…",
+  "system.noActiveGame": "No active game in progress.",
+  "system.noActiveGameHint": "Select \"New Game\" from the top-right menu to begin your adventure.",
+  "system.llmNotConfigured": "[Hint] Please configure the LLM API in Settings before starting a game.",
+  "system.llmNotConfiguredShort": "[Hint] Please configure the LLM API in Settings.",
+  "system.configSaved": "[System] LLM configuration saved",
+  "system.configInvalid": "[Error] Invalid configuration: {{message}}",
+  "system.modelListFailed": "[Error] Failed to fetch model list: {{message}}",
+  "system.gameReset": "Game has been reset.",
+  "system.changedMind": "You changed your mind.",
+  "system.saveSuccess": "[System] Save successful: {{id}}…",
+  "system.saveFailed": "[System] Save failed: {{message}}",
+  "system.loadedSession": "Loaded save: {{location}}, Turn {{turn}}",
+
+  "error.generic": "[Error] {{message}}",
+  "error.notInStyleSelect": "[Error] Not in style selection phase",
+  "error.invalidPresetIndex": "[Error] Invalid preset index",
+  "error.notInCharCreate": "[Error] Not in character creation phase",
+  "error.gameNotInitialized": "[Error] Game not initialized",
+  "error.invalidOption": "[Error] Invalid option",
+  "error.noPendingAction": "[Error] No pending action to confirm",
+  "error.cannotSwitchSession": "[Error] Cannot switch to that save"
+}

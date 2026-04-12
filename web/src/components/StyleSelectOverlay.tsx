@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
 import './StyleSelectOverlay.css'
 
 export function StyleSelectOverlay() {
+  const t = useT()
   const presets = useGameStore((s) => s.stylePresets)
   const send = useGameStore((s) => s.send)
   const [customMode, setCustomMode] = useState(false)
@@ -32,8 +34,8 @@ export function StyleSelectOverlay() {
     send({
       type: 'select_style_custom',
       tone: customTone.trim(),
-      narrative_style: customNarrative.trim() || '自由发挥',
-      player_archetype: customArchetype.trim() || '由AI决定',
+      narrative_style: customNarrative.trim() || t('style.defaultNarrative'),
+      player_archetype: customArchetype.trim() || t('style.defaultArchetype'),
     })
   }
 
@@ -42,36 +44,36 @@ export function StyleSelectOverlay() {
       <div className="style-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose() }}>
         <div className="style-panel">
           <div className="style-header">
-            <h2 className="style-title">自定义设定</h2>
+            <h2 className="style-title">{t('style.customTitle')}</h2>
             <button className="style-close-btn" onClick={handleClose}>&#10005;</button>
           </div>
           <div className="custom-form">
             <label className="custom-label">
-              基调与风格 <span className="required">*</span>
+              {t('style.toneLabel')} <span className="required">*</span>
               <textarea
                 className="custom-input"
                 rows={2}
-                placeholder="例：赛博朋克世界中的底层叛逆故事"
+                placeholder={t('style.tonePlaceholder')}
                 value={customTone}
                 onChange={(e) => setCustomTone(e.target.value)}
               />
             </label>
             <label className="custom-label">
-              叙事风格
+              {t('style.narrativeLabel')}
               <textarea
                 className="custom-input"
                 rows={2}
-                placeholder="例：第一人称内心独白，意识流"
+                placeholder={t('style.narrativePlaceholder')}
                 value={customNarrative}
                 onChange={(e) => setCustomNarrative(e.target.value)}
               />
             </label>
             <label className="custom-label">
-              主角设定
+              {t('style.archetypeLabel')}
               <textarea
                 className="custom-input"
                 rows={2}
-                placeholder="例：失忆的机械师，在废弃空间站醒来"
+                placeholder={t('style.archetypePlaceholder')}
                 value={customArchetype}
                 onChange={(e) => setCustomArchetype(e.target.value)}
               />
@@ -79,14 +81,14 @@ export function StyleSelectOverlay() {
           </div>
           <div className="style-actions">
             <button className="style-btn style-btn-back" onClick={() => setCustomMode(false)}>
-              返回预设
+              {t('style.backToPresets')}
             </button>
             <button
               className="style-btn style-btn-confirm"
               onClick={submitCustom}
               disabled={!customTone.trim()}
             >
-              开始生成
+              {t('style.startGenerate')}
             </button>
           </div>
         </div>
@@ -98,7 +100,7 @@ export function StyleSelectOverlay() {
     <div className="style-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose() }}>
       <div className="style-panel">
         <div className="style-header">
-          <h2 className="style-title">选择世界风格</h2>
+          <h2 className="style-title">{t('style.title')}</h2>
           <button className="style-close-btn" onClick={handleClose}>&#10005;</button>
         </div>
         <div className="style-grid">
@@ -111,10 +113,10 @@ export function StyleSelectOverlay() {
         </div>
         <div className="style-actions">
           <button className="style-btn style-btn-random" onClick={selectRandom}>
-            随机选择
+            {t('style.random')}
           </button>
           <button className="style-btn style-btn-custom" onClick={() => setCustomMode(true)}>
-            自定义设定
+            {t('style.custom')}
           </button>
         </div>
       </div>

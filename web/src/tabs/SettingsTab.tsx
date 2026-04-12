@@ -1,17 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
+import { i18n } from '../i18n'
+import { LOCALES, LOCALE_LABELS, LOCALE_TO_LANGUAGE } from '../i18n/locales'
+import type { LocaleId } from '../i18n/locales'
 import { registerTab } from './registry'
 import { PROVIDERS, type ProviderFields, emptyFields, getModelPlaceholder } from '../shared/provider-defs'
 import { THEMES } from '../theme/themes'
+import { getEngine } from '../engine/bootstrap'
 import './SettingsTab.css'
 
 const FONT_SCALE_OPTIONS = [
-  { value: 0.85, label: '较小' },
-  { value: 0.9, label: '小' },
-  { value: 1, label: '默认' },
-  { value: 1.1, label: '大' },
-  { value: 1.2, label: '较大' },
-  { value: 1.35, label: '很大' },
+  { value: 0.85, labelKey: 'settings.fontScale.smaller' },
+  { value: 0.9, labelKey: 'settings.fontScale.small' },
+  { value: 1, labelKey: 'settings.fontScale.default' },
+  { value: 1.1, labelKey: 'settings.fontScale.large' },
+  { value: 1.2, labelKey: 'settings.fontScale.larger' },
+  { value: 1.35, labelKey: 'settings.fontScale.largest' },
 ]
 
 function applyFontScale(scale: number) {
@@ -21,15 +26,16 @@ function applyFontScale(scale: number) {
   localStorage.setItem('lorecraft:font-scale', String(scale))
 }
 
-const GAMEPLAY_TOGGLES: Array<{ key: keyof import('../types/protocol').GameplayOptions; label: string; desc: string; invert?: boolean }> = [
-  { key: 'inner_voice', label: '内心声音', desc: '属性人格会对你的行动发表看法' },
-  { key: 'insistence', label: '坚持机制', desc: '内心声音可以阻止你的行动，需要坚持才能执行' },
-  { key: 'action_arbiter', label: '行动仲裁', desc: '判断行动可行性并触发属性检定' },
-  { key: 'narrative_progress', label: '叙事进度', desc: '追踪剧情阶段推进，引导故事节奏' },
-  { key: 'world_assertion', label: '禁止世界断言', desc: '开启后，忽略玩家输入中对世界的断言和语气暗示', invert: true },
+const GAMEPLAY_TOGGLES: Array<{ key: keyof import('../types/protocol').GameplayOptions; labelKey: string; descKey: string; invert?: boolean }> = [
+  { key: 'inner_voice', labelKey: 'settings.gameplay.innerVoice', descKey: 'settings.gameplay.innerVoiceDesc' },
+  { key: 'insistence', labelKey: 'settings.gameplay.insistence', descKey: 'settings.gameplay.insistenceDesc' },
+  { key: 'action_arbiter', labelKey: 'settings.gameplay.actionArbiter', descKey: 'settings.gameplay.actionArbiterDesc' },
+  { key: 'narrative_progress', labelKey: 'settings.gameplay.narrativeProgress', descKey: 'settings.gameplay.narrativeProgressDesc' },
+  { key: 'world_assertion', labelKey: 'settings.gameplay.worldAssertion', descKey: 'settings.gameplay.worldAssertionDesc', invert: true },
 ]
 
 function SettingsTab() {
+  const t = useT()
   const llmConfig = useGameStore((s) => s.llmConfig)
   const testResult = useGameStore((s) => s.llmTestResult)
   const modelList = useGameStore((s) => s.llmModels)
@@ -40,6 +46,8 @@ function SettingsTab() {
   const setDebugEnabled = useGameStore((s) => s.setDebugEnabled)
   const theme = useGameStore((s) => s.theme)
   const setTheme = useGameStore((s) => s.setTheme)
+  const locale = useGameStore((s) => s.locale)
+  const setLocale = useGameStore((s) => s.setLocale)
 
   const [fontScale, setFontScale] = useState(() => {
     const saved = localStorage.getItem('lorecraft:font-scale')
@@ -114,6 +122,14 @@ function SettingsTab() {
     })
   }
 
+  function handleLocaleChange(l: LocaleId) {
+    setLocale(l)
+    i18n.changeLanguage(l)
+    // Sync engine language
+    const engine = getEngine()
+    if (engine) engine.setLanguage(LOCALE_TO_LANGUAGE[l])
+  }
+
   const hasKey = fields.apiKey.trim().length > 0
   const canSave = hasKey && !isProcessing
   const canTest = hasKey && !isProcessing
@@ -121,14 +137,14 @@ function SettingsTab() {
   return (
     <div className="settings-tab">
       <div className="settings-section">
-        <div className="settings-section-title">大模型配置</div>
+        <div className="settings-section-title">{t('settings.llmConfig')}</div>
 
         {isProcessing && (
-          <div className="settings-warn">回合进行中，无法修改配置</div>
+          <div className="settings-warn">{t('settings.processingWarn')}</div>
         )}
 
         <div className="settings-field">
-          <span className="settings-field-label">服务商</span>
+          <span className="settings-field-label">{t('settings.provider')}</span>
           <select className="settings-select" value={provider} onChange={(e) => handleProviderChange(e.target.value)} disabled={isProcessing}>
             {PROVIDERS.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
@@ -138,7 +154,7 @@ function SettingsTab() {
 
         {showBaseUrl && (
           <div className="settings-field">
-            <span className="settings-field-label">API 地址</span>
+            <span className="settings-field-label">{t('settings.apiUrl')}</span>
             <input className="settings-input" type="text" value={fields.baseUrl}
               onChange={(e) => updateField('baseUrl', e.target.value)}
               placeholder={currentProvider?.baseUrlPlaceholder ?? 'https://api.example.com/v1'}
@@ -148,7 +164,7 @@ function SettingsTab() {
         )}
 
         <div className="settings-field">
-          <span className="settings-field-label">API Key</span>
+          <span className="settings-field-label">{t('settings.apiKey')}</span>
           <div className="settings-key-row">
             <input className="settings-input settings-key-input"
               type={showKey ? 'text' : 'password'} value={fields.apiKey}
@@ -156,19 +172,19 @@ function SettingsTab() {
               placeholder={currentProvider?.keyPlaceholder ?? 'sk-...'}
               disabled={isProcessing} />
             <button className="settings-eye-btn" type="button" onClick={() => setShowKey(!showKey)}
-              title={showKey ? '隐藏' : '显示'}>
+              title={showKey ? t('settings.hideKey') : t('settings.showKey')}>
               {showKey ? '\u25C9' : '\u25CE'}
             </button>
           </div>
         </div>
 
         <div className="settings-field">
-          <span className="settings-field-label">模型</span>
+          <span className="settings-field-label">{t('settings.model')}</span>
           <div className="settings-model-row">
             {modelList && modelList.length > 0 ? (
               <select className="settings-select settings-model-select" value={fields.model}
                 onChange={(e) => updateField('model', e.target.value)} disabled={isProcessing}>
-                <option value="">默认模型</option>
+                <option value="">{t('settings.defaultModel')}</option>
                 {modelList.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             ) : (
@@ -177,53 +193,53 @@ function SettingsTab() {
                 placeholder={getModelPlaceholder(provider)} disabled={isProcessing} />
             )}
             <button className="settings-fetch-btn" disabled={!canTest || loadingModels} onClick={handleListModels}>
-              {loadingModels ? '...' : '获取列表'}
+              {loadingModels ? '...' : t('settings.fetchModels')}
             </button>
           </div>
         </div>
 
         <div className="settings-actions">
           <button className="settings-test-btn" disabled={!canTest || testing} onClick={handleTest}>
-            {testing ? '测试中...' : '测试连接'}
+            {testing ? t('settings.testing') : t('settings.testConnection')}
           </button>
           <button className="settings-save-btn" disabled={!canSave} onClick={handleSave}>
-            保存并应用
+            {t('settings.saveApply')}
           </button>
         </div>
 
         {testResult && (
           <div className={`settings-test-result ${testResult.success ? 'success' : 'fail'}`}>
-            {testResult.success ? '连接成功' : `连接失败: ${testResult.message}`}
+            {testResult.success ? t('settings.connectSuccess') : t('settings.connectFail', { message: testResult.message })}
           </div>
         )}
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-title">主题</div>
+        <div className="settings-section-title">{t('settings.theme')}</div>
         <div className="theme-cards">
-          {THEMES.map((t) => (
+          {THEMES.map((tm) => (
             <button
-              key={t.id}
+              key={tm.id}
               type="button"
-              className={`theme-card ${theme === t.id ? 'active' : ''}`}
-              onClick={() => setTheme(t.id)}
+              className={`theme-card ${theme === tm.id ? 'active' : ''}`}
+              onClick={() => setTheme(tm.id)}
             >
               <div className="theme-card-swatches">
-                <span className="theme-swatch" style={{ background: t.swatch.bg }} />
-                <span className="theme-swatch" style={{ background: t.swatch.accent }} />
-                <span className="theme-swatch" style={{ background: t.swatch.fg }} />
+                <span className="theme-swatch" style={{ background: tm.swatch.bg }} />
+                <span className="theme-swatch" style={{ background: tm.swatch.accent }} />
+                <span className="theme-swatch" style={{ background: tm.swatch.fg }} />
               </div>
-              <div className="theme-card-name">{t.label}</div>
-              <div className="theme-card-desc">{t.description}</div>
+              <div className="theme-card-name">{t(`theme.${tm.id}.label`)}</div>
+              <div className="theme-card-desc">{t(`theme.${tm.id}.description`)}</div>
             </button>
           ))}
         </div>
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-title">显示</div>
+        <div className="settings-section-title">{t('settings.display')}</div>
         <div className="settings-field">
-          <span className="settings-field-label">界面缩放</span>
+          <span className="settings-field-label">{t('settings.uiZoom')}</span>
           <div className="font-scale-row">
             {FONT_SCALE_OPTIONS.map((opt) => (
               <button
@@ -231,15 +247,15 @@ function SettingsTab() {
                 className={`font-scale-btn ${fontScale === opt.value ? 'active' : ''}`}
                 onClick={() => { setFontScale(opt.value); applyFontScale(opt.value) }}
               >
-                {opt.label}
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
         </div>
         <label className="gameplay-toggle">
             <div className="gameplay-toggle-text">
-              <span className="gameplay-toggle-label">调试面板</span>
-              <span className="gameplay-toggle-desc">显示管线、LLM日志、状态浏览等开发调试工具</span>
+              <span className="gameplay-toggle-label">{t('settings.debugPanel')}</span>
+              <span className="gameplay-toggle-desc">{t('settings.debugPanelDesc')}</span>
             </div>
             <input
               type="checkbox"
@@ -251,17 +267,17 @@ function SettingsTab() {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-title">游戏选项</div>
+        <div className="settings-section-title">{t('settings.gameOptions')}</div>
         <div className="gameplay-toggles">
-          {GAMEPLAY_TOGGLES.map((t) => {
-            const disabled = t.key === 'insistence' && !gameplayOptions.inner_voice
-            const rawVal = disabled ? false : gameplayOptions[t.key]
-            const checked = t.invert ? !rawVal : rawVal
+          {GAMEPLAY_TOGGLES.map((tg) => {
+            const disabled = tg.key === 'insistence' && !gameplayOptions.inner_voice
+            const rawVal = disabled ? false : gameplayOptions[tg.key]
+            const checked = tg.invert ? !rawVal : rawVal
             return (
-              <label key={t.key} className={`gameplay-toggle ${disabled ? 'disabled' : ''}`}>
+              <label key={tg.key} className={`gameplay-toggle ${disabled ? 'disabled' : ''}`}>
                 <div className="gameplay-toggle-text">
-                  <span className="gameplay-toggle-label">{t.label}</span>
-                  <span className="gameplay-toggle-desc">{t.desc}</span>
+                  <span className="gameplay-toggle-label">{t(tg.labelKey)}</span>
+                  <span className="gameplay-toggle-desc">{t(tg.descKey)}</span>
                 </div>
                 <input
                   type="checkbox"
@@ -269,9 +285,9 @@ function SettingsTab() {
                   checked={checked}
                   disabled={disabled}
                   onChange={(e) => {
-                    const newVal = t.invert ? !e.target.checked : e.target.checked
-                    const updates: Record<string, boolean> = { [t.key]: newVal }
-                    if (t.key === 'inner_voice' && !newVal) {
+                    const newVal = tg.invert ? !e.target.checked : e.target.checked
+                    const updates: Record<string, boolean> = { [tg.key]: newVal }
+                    if (tg.key === 'inner_voice' && !newVal) {
                       updates.insistence = false
                     }
                     send({ type: 'set_gameplay_options', options: updates })
@@ -280,6 +296,21 @@ function SettingsTab() {
               </label>
             )
           })}
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">{t('ui:settings.language', { defaultValue: 'Language' })}</div>
+        <div className="font-scale-row">
+          {LOCALES.map((l) => (
+            <button
+              key={l}
+              className={`font-scale-btn ${locale === l ? 'active' : ''}`}
+              onClick={() => handleLocaleChange(l)}
+            >
+              {LOCALE_LABELS[l]}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -296,4 +327,4 @@ function SettingsTab() {
   )
 }
 
-registerTab({ id: 'settings', label: '设置', component: SettingsTab })
+registerTab({ id: 'settings', labelKey: 'tab.settings', component: SettingsTab })

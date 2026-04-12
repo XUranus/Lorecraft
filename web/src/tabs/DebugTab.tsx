@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
 import type { DebugTurn, DebugStepEntry, DebugErrorEntry } from '../stores/useGameStore'
 import { getEngine } from '../engine/bootstrap'
 import { registerTab } from './registry'
@@ -8,6 +9,7 @@ import './DebugTab.css'
 type DebugView = 'pipeline' | 'llm' | 'store' | 'errors'
 
 function DebugTab() {
+  const t = useT()
   const [view, setView] = useState<DebugView>('pipeline')
   const debugErrors = useGameStore((s) => s.debugErrors)
 
@@ -15,16 +17,16 @@ function DebugTab() {
     <div className="debug-tab">
       <div className="debug-toolbar">
         <button className={`debug-toolbar-btn ${view === 'pipeline' ? 'active' : ''}`} onClick={() => setView('pipeline')}>
-          管线
+          {t('debug.toolbar.pipeline')}
         </button>
         <button className={`debug-toolbar-btn ${view === 'llm' ? 'active' : ''}`} onClick={() => setView('llm')}>
-          LLM 日志
+          {t('debug.toolbar.llmLog')}
         </button>
         <button className={`debug-toolbar-btn ${view === 'store' ? 'active' : ''}`} onClick={() => setView('store')}>
-          状态浏览
+          {t('debug.toolbar.stateViewer')}
         </button>
         <button className={`debug-toolbar-btn ${view === 'errors' ? 'active' : ''}`} onClick={() => setView('errors')}>
-          错误{debugErrors.length > 0 && <span className="debug-error-badge">{debugErrors.length}</span>}
+          {t('debug.toolbar.errors')}{debugErrors.length > 0 && <span className="debug-error-badge">{debugErrors.length}</span>}
         </button>
       </div>
       <div className="debug-view-content">
@@ -42,6 +44,7 @@ function DebugTab() {
 // ============================================================
 
 function PipelineView() {
+  const t = useT()
   const initLog = useGameStore((s) => s.debugInitLog)
   const debugTurns = useGameStore((s) => s.debugTurns)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -58,7 +61,7 @@ function PipelineView() {
   return (
     <div className="debug-pipeline-view" ref={containerRef}>
       {empty ? (
-        <div className="debug-empty">等待游戏开始以查看调试信息…</div>
+        <div className="debug-empty">{t('debug.waitingHint')}</div>
       ) : (
         <>
           {initLog.length > 0 && !hasTurn0Debug && <InitBlock log={initLog} />}
@@ -70,6 +73,7 @@ function PipelineView() {
 }
 
 function InitBlock({ log }: { log: Array<{ message: string; timestamp: number }> }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(true)
   const t0 = log[0]?.timestamp ?? 0
   const tEnd = log[log.length - 1]?.timestamp ?? 0
@@ -79,10 +83,10 @@ function InitBlock({ log }: { log: Array<{ message: string; timestamp: number }>
     <div className="debug-turn">
       <div className="debug-turn-header" onClick={() => setExpanded(!expanded)}>
         <span className="debug-chevron">{expanded ? '▼' : '▶'}</span>
-        <span className="debug-turn-label">世界生成</span>
-        <span className="debug-turn-input">初始化</span>
+        <span className="debug-turn-label">{t('debug.worldGen')}</span>
+        <span className="debug-turn-input">{t('debug.init')}</span>
         {totalMs > 0 && <span className="debug-turn-tokens">{(totalMs / 1000).toFixed(1)}s</span>}
-        <span className="debug-turn-count">{log.length} 步</span>
+        <span className="debug-turn-count">{t('debug.steps', { completed: log.length, total: log.length })}</span>
       </div>
       {expanded && (
         <div className="debug-turn-body">
@@ -130,6 +134,7 @@ function buildTurnReport(turn: DebugTurn, steps: GroupedStep[]): string {
 }
 
 function TurnBlock({ turn, isLast }: { turn: DebugTurn; isLast: boolean }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(isLast)
   const [copied, setCopied] = useState(false)
 
@@ -159,17 +164,17 @@ function TurnBlock({ turn, isLast }: { turn: DebugTurn; isLast: boolean }) {
     <div className="debug-turn">
       <div className="debug-turn-header" onClick={() => setExpanded(!expanded)}>
         <span className="debug-chevron">{expanded ? '▼' : '▶'}</span>
-        <span className="debug-turn-label">回合 {turn.turn}</span>
+        <span className="debug-turn-label">{t('debug.turn', { turn: turn.turn })}</span>
         <span className="debug-turn-input">{turn.input}</span>
         {totalDuration > 0 && <span className="debug-turn-duration">{(totalDuration / 1000).toFixed(1)}s</span>}
         {totalIn > 0 && (
           <span className="debug-turn-tokens">in:{totalIn} out:{totalOut}</span>
         )}
-        <span className="debug-turn-count">{completedSteps}/{steps.length} 步</span>
-        {hasRunning && <span className="debug-turn-running">运行中</span>}
+        <span className="debug-turn-count">{t('debug.steps', { completed: completedSteps, total: steps.length })}</span>
+        {hasRunning && <span className="debug-turn-running">{t('debug.running')}</span>}
         {steps.length > 0 && (
-          <button className="debug-turn-copy" onClick={handleCopyReport} title="复制该回合完整调试报告">
-            {copied ? '已复制' : '复制报告'}
+          <button className="debug-turn-copy" onClick={handleCopyReport} title={t('debug.copyReport')}>
+            {copied ? t('debug.copied') : t('debug.copyReport')}
           </button>
         )}
       </div>
@@ -269,6 +274,7 @@ function groupSteps(entries: DebugStepEntry[]): GroupedStep[] {
 }
 
 function StepNode({ step }: { step: GroupedStep }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
   const [showContext, setShowContext] = useState(false)
   const hasData = !!step.data
@@ -299,9 +305,9 @@ function StepNode({ step }: { step: GroupedStep }) {
         {hasLLM && <span className="debug-step-tag llm">LLM x{step.llmCalls!.length}</span>}
         {hasContext && <span className="debug-step-tag ctx">CTX</span>}
         {step.running && <span className="debug-step-spinner">&#x27F3;</span>}
-        {step.status === 'short_circuit' && <span className="debug-step-tag sc">短路</span>}
-        {step.status === 'error' && <span className="debug-step-tag err">错误</span>}
-        {(hasData || hasLLM || hasContext) && <span className="debug-expand-hint">{expanded ? '收起' : '展开'}</span>}
+        {step.status === 'short_circuit' && <span className="debug-step-tag sc">{t('debug.shortCircuit')}</span>}
+        {step.status === 'error' && <span className="debug-step-tag err">{t('debug.error')}</span>}
+        {(hasData || hasLLM || hasContext) && <span className="debug-expand-hint">{expanded ? t('debug.collapse') : t('debug.expand')}</span>}
       </div>
       {expanded && (
         <div className="debug-step-body">
@@ -313,7 +319,7 @@ function StepNode({ step }: { step: GroupedStep }) {
             <div className="debug-context-section">
               <div className="debug-context-header" onClick={() => setShowContext(!showContext)}>
                 <span className="debug-chevron">{showContext ? '▼' : '▶'}</span>
-                <span className="debug-context-label">Pipeline Context ({Object.keys(step.contextData!).length} 键)</span>
+                <span className="debug-context-label">{t('debug.contextKeys', { count: Object.keys(step.contextData!).length })}</span>
               </div>
               {showContext && (
                 <div className="debug-context-body">
@@ -373,6 +379,7 @@ function formatStepData(raw: string): string {
 }
 
 function LLMCallCard({ call, index }: { call: LLMCallInfo; index: number }) {
+  const t = useT()
   const [showInput, setShowInput] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
 
@@ -393,13 +400,13 @@ function LLMCallCard({ call, index }: { call: LLMCallInfo; index: number }) {
           className={`llm-call-toggle ${showInput ? 'active' : ''}`}
           onClick={() => setShowInput(!showInput)}
         >
-          输入 ({call.messages.length} 条消息)
+          {t('debug.llm.input', { count: call.messages.length })}
         </button>
         <button
           className={`llm-call-toggle ${showOutput ? 'active' : ''}`}
           onClick={() => setShowOutput(!showOutput)}
         >
-          输出
+          {t('debug.llm.output')}
         </button>
       </div>
       {showInput && (
@@ -431,13 +438,14 @@ function formatLLMResponse(raw: string): string {
 }
 
 function StateBlock({ states }: { states: Record<string, unknown> }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
 
   return (
     <div className="debug-state-block">
       <div className="debug-state-header" onClick={() => setExpanded(!expanded)}>
         <span className="debug-chevron">{expanded ? '▼' : '▶'}</span>
-        <span className="debug-state-label">状态快照</span>
+        <span className="debug-state-label">{t('debug.stateSnapshot')}</span>
       </div>
       {expanded && (
         <div className="debug-state-body">
@@ -475,6 +483,7 @@ function StateSection({ label, data }: { label: string; data: unknown }) {
 // ============================================================
 
 function LLMLogView() {
+  const t = useT()
   const debugTurns = useGameStore((s) => s.debugTurns)
   const [filter, setFilter] = useState('')
 
@@ -507,20 +516,20 @@ function LLMLogView() {
   return (
     <div className="debug-llm-view">
       <div className="debug-llm-stats">
-        <span className="debug-llm-stat">调用: {totalCalls}</span>
-        <span className="debug-llm-stat">输入: {totalInputTokens.toLocaleString()}</span>
-        <span className="debug-llm-stat">输出: {totalOutputTokens.toLocaleString()}</span>
-        <span className="debug-llm-stat">耗时: {(totalDuration / 1000).toFixed(1)}s</span>
+        <span className="debug-llm-stat">{t('debug.llm.calls', { count: totalCalls })}</span>
+        <span className="debug-llm-stat">{t('debug.llm.inputTokens', { count: totalInputTokens.toLocaleString() })}</span>
+        <span className="debug-llm-stat">{t('debug.llm.outputTokens', { count: totalOutputTokens.toLocaleString() })}</span>
+        <span className="debug-llm-stat">{t('debug.llm.duration', { duration: (totalDuration / 1000).toFixed(1) })}</span>
       </div>
       <input
         className="debug-filter-input"
         type="text"
-        placeholder="过滤 (agent 类型 / 步骤名)..."
+        placeholder={t('debug.llm.filterPlaceholder')}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
       {filtered.length === 0 ? (
-        <div className="debug-empty">暂无 LLM 调用记录</div>
+        <div className="debug-empty">{t('debug.llm.empty')}</div>
       ) : (
         <div className="debug-llm-list">
           {filtered.map((item, i) => (
@@ -543,6 +552,7 @@ function LLMLogView() {
 // ============================================================
 
 function StoreView() {
+  const t = useT()
   const [keys, setKeys] = useState<string[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [value, setValue] = useState<string>('')
@@ -590,18 +600,18 @@ function StoreView() {
         <input
           className="debug-filter-input"
           type="text"
-          placeholder="前缀过滤 (如 player:, memory:)..."
+          placeholder={t('debug.store.prefixPlaceholder')}
           value={prefix}
           onChange={(e) => setPrefix(e.target.value)}
         />
         <button className="debug-store-refresh" onClick={loadKeys} disabled={loading}>
-          {loading ? '...' : '刷新'}
+          {loading ? '...' : t('debug.store.refresh')}
         </button>
       </div>
       <div className="debug-store-layout">
         <div className="debug-store-keys">
           {keys.length === 0 ? (
-            <div className="debug-empty">无数据</div>
+            <div className="debug-empty">{t('debug.store.empty')}</div>
           ) : (
             Object.entries(groups).map(([group, groupKeys]) => (
               <StoreKeyGroup
@@ -621,7 +631,7 @@ function StoreView() {
               <pre className="debug-store-value-data">{value}</pre>
             </>
           ) : (
-            <div className="debug-empty">选择一个键查看值</div>
+            <div className="debug-empty">{t('debug.store.selectHint')}</div>
           )}
         </div>
       </div>
@@ -662,10 +672,11 @@ function StoreKeyGroup({ group, keys, selectedKey, onSelect }: {
 // ============================================================
 
 function ErrorView() {
+  const t = useT()
   const debugErrors = useGameStore((s) => s.debugErrors)
 
   if (debugErrors.length === 0) {
-    return <div className="debug-error-view"><div className="debug-empty">暂无错误记录</div></div>
+    return <div className="debug-error-view"><div className="debug-empty">{t('debug.error.empty')}</div></div>
   }
 
   return (
@@ -678,6 +689,7 @@ function ErrorView() {
 }
 
 function ErrorEntry({ error, index }: { error: DebugErrorEntry; index: number }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(index === 0)
   const [copied, setCopied] = useState(false)
 
@@ -710,11 +722,11 @@ function ErrorEntry({ error, index }: { error: DebugErrorEntry; index: number })
       {expanded && (
         <div className="debug-error-body">
           <div className="debug-error-section">
-            <div className="debug-error-section-title">输入</div>
+            <div className="debug-error-section-title">{t('debug.error.input')}</div>
             <pre className="debug-error-data">{error.input}</pre>
           </div>
           <div className="debug-error-section">
-            <div className="debug-error-section-title">错误</div>
+            <div className="debug-error-section-title">{t('debug.error.error')}</div>
             <pre className="debug-error-data debug-error-stack">{error.error}</pre>
           </div>
           {error.context_data && Object.keys(error.context_data).length > 0 && (
@@ -724,7 +736,7 @@ function ErrorEntry({ error, index }: { error: DebugErrorEntry; index: number })
             </div>
           )}
           <button className="debug-error-copy" onClick={handleCopy}>
-            {copied ? '已复制' : '复制错误报告'}
+            {copied ? t('debug.error.copied') : t('debug.error.copyReport')}
           </button>
         </div>
       )}
@@ -732,4 +744,4 @@ function ErrorEntry({ error, index }: { error: DebugErrorEntry; index: number })
   )
 }
 
-registerTab({ id: 'debug', label: '调试', component: DebugTab })
+registerTab({ id: 'debug', labelKey: 'tab.debug', component: DebugTab })

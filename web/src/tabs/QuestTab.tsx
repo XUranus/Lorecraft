@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
 import { registerTab } from './registry'
 import { computeLayout, NODE_W, NODE_H } from './quest-dag-layout'
 import type { PositionedNode } from './quest-dag-layout'
@@ -11,6 +12,7 @@ const ZOOM_MAX = 2
 const ZOOM_STEP = 0.15
 
 function QuestTab() {
+  const t = useT()
   const send = useGameStore((s) => s.send)
   const questGraph = useGameStore((s) => s.questGraph)
   const turn = useGameStore((s) => s.turn)
@@ -159,7 +161,7 @@ function QuestTab() {
   if (!questGraph || !layout) {
     return (
       <div className="quest-tab">
-        <div className="quest-tab-empty">任务将在冒险过程中出现</div>
+        <div className="quest-tab-empty">{t('quest.emptyHint')}</div>
       </div>
     )
   }
@@ -230,7 +232,7 @@ function QuestTab() {
         </svg>
         {/* Zoom controls */}
         <div className="quest-zoom-controls">
-          <button className="quest-zoom-btn" onClick={zoomIn} aria-label="放大">+</button>
+          <button className="quest-zoom-btn" onClick={zoomIn} aria-label={t('quest.zoomIn')}>+</button>
           <input
             className="quest-zoom-slider"
             type="range"
@@ -240,7 +242,7 @@ function QuestTab() {
             value={zoom}
             onChange={onZoomSlider}
           />
-          <button className="quest-zoom-btn" onClick={zoomOut} aria-label="缩小">&minus;</button>
+          <button className="quest-zoom-btn" onClick={zoomOut} aria-label={t('quest.zoomOut')}>&minus;</button>
           <span className="quest-zoom-label">{Math.round(zoom * 100)}%</span>
         </div>
       </div>
@@ -256,8 +258,10 @@ function DetailPanel({
   node: PositionedNode | null
   quests: Array<{ id: string; title: string; status: string }>
 }) {
+  const t = useT()
+
   if (!node) {
-    return <div className="quest-detail-empty">点击节点查看详情</div>
+    return <div className="quest-detail-empty">{t('quest.selectHint')}</div>
   }
 
   const quest = quests.find(q => q.id === node.quest_id)
@@ -271,15 +275,15 @@ function DetailPanel({
       </div>
       <p className="quest-detail-summary">{node.summary}</p>
       {node.status === 'active' && node.hint && (
-        <p className="quest-detail-hint">提示：{node.hint}</p>
+        <p className="quest-detail-hint">{t('quest.hint', { hint: node.hint })}</p>
       )}
-      <div className="quest-detail-turn">回合 {node.turn}</div>
+      <div className="quest-detail-turn">{t('quest.turn', { turn: node.turn })}</div>
     </div>
   )
 }
 
 registerTab({
   id: 'quests',
-  label: '任务',
+  labelKey: 'tab.quests',
   component: QuestTab,
 })

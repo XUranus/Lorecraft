@@ -27,4 +27,4 @@ function NarrativeTab() {
   )
 }
 
-registerTab({ id: 'narrative', label: '叙事', component: NarrativeTab })
+registerTab({ id: 'narrative', labelKey: 'tab.narrative', component: NarrativeTab })

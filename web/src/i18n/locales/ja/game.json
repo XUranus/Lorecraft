@@ -1,0 +1,41 @@
+{
+  "difficulty.TRIVIAL": "簡単",
+  "difficulty.ROUTINE": "普通",
+  "difficulty.HARD": "困難",
+  "difficulty.VERY_HARD": "非常に困難",
+  "difficulty.LEGENDARY": "伝説",
+
+  "outcome.CRITICAL_SUCCESS": "大成功！",
+  "outcome.SUCCESS": "成功",
+  "outcome.FAILURE": "失敗",
+  "outcome.CRITICAL_FAILURE": "大失敗！",
+
+  "narrative.aside": "【傍白】",
+  "narrative.prologue": "【序幕】",
+  "narrative.playerIntro": "あなたは{{name}}。{{background}}",
+
+  "system.initFailed": "【エラー】エンジンの初期化に失敗しました",
+  "system.initializing": "初期化中、お待ちください…",
+  "system.initializingHint": "【ヒント】初期化中、お待ちください…",
+  "system.noActiveGame": "進行中のゲームがありません。",
+  "system.noActiveGameHint": "右上のメニューから「ニューゲーム」を選択して冒険を始めましょう。",
+  "system.llmNotConfigured": "【ヒント】ゲームを開始する前に、設定でLLM APIを構成してください。",
+  "system.llmNotConfiguredShort": "【ヒント】設定でLLM APIを構成してください。",
+  "system.configSaved": "【システム】LLM設定を保存しました",
+  "system.configInvalid": "【エラー】無効な設定: {{message}}",
+  "system.modelListFailed": "【エラー】モデル一覧の取得に失敗: {{message}}",
+  "system.gameReset": "ゲームがリセットされました。",
+  "system.changedMind": "考えを変えました。",
+  "system.saveSuccess": "【システム】セーブ成功: {{id}}…",
+  "system.saveFailed": "【システム】セーブ失敗: {{message}}",
+  "system.loadedSession": "セーブをロードしました：{{location}}、ターン {{turn}}",
+
+  "error.generic": "【エラー】{{message}}",
+  "error.notInStyleSelect": "【エラー】現在はスタイル選択フェーズではありません",
+  "error.invalidPresetIndex": "【エラー】無効なプリセットインデックス",
+  "error.notInCharCreate": "【エラー】現在はキャラクター作成フェーズではありません",
+  "error.gameNotInitialized": "【エラー】ゲームが初期化されていません",
+  "error.invalidOption": "【エラー】無効なオプション",
+  "error.noPendingAction": "【エラー】確認待ちの行動がありません",
+  "error.cannotSwitchSession": "【エラー】そのセーブに切り替えられません"
+}

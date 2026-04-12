@@ -160,7 +160,7 @@ export class GameLoop {
       timeout_ms: 120_000,
       max_retries: 2,
       base_delay_ms: 2000,
-      language: '中文',
+      language: undefined,
       debugLogger: options?.debugLogger,
     })
     this.configLoader = new ExtensionConfigLoader()
@@ -195,6 +195,11 @@ export class GameLoop {
   /** Hot-swap the LLM provider at runtime */
   setProvider(provider: ILLMProvider): void {
     this.agentRunner.setProvider(provider)
+  }
+
+  /** Change the language injected into LLM prompts at runtime */
+  setLanguage(lang: string): void {
+    this.agentRunner.setLanguage(lang)
   }
 
   getGameplayOptions(): GameplayOptions {

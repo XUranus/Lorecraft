@@ -18,6 +18,60 @@ import {
 } from '@engine/server/llm-config-browser'
 import type { LLMConfig } from '@engine/server/llm-config-browser'
 import type { ClientMessage } from '../types/protocol'
+import { LOCALE_TO_LANGUAGE, type LocaleId } from '../i18n/locales'
+import { t, i18n } from '../i18n'
+
+/**
+ * Classify a narrative paragraph as dialogue, sound, or null (plain text)
+ * based on the current locale's quotation conventions.
+ *   zh-CN / ja: 「…」 dialogue, 『…』 sound
+ *   en:         "…" dialogue, *…* sound
+ */
+function classifyParagraph(para: string): 'dialogue' | 'sound' | null {
+  const lang = (i18n.language ?? 'zh-CN') as LocaleId
+  if (lang === 'en') {
+    if (/^".*"$/.test(para) || /^".*"$/.test(para)) return 'dialogue'
+    if (/^\*.*\*$/.test(para)) return 'sound'
+    if (/".*"/.test(para) || /".*"/.test(para)) return 'dialogue'
+  } else {
+    // zh-CN, ja — CJK quotation marks
+    if (/^「.*」$/.test(para)) return 'dialogue'
+    if (/^『.*』$/.test(para)) return 'sound'
+    if (/「.*」/.test(para)) return 'dialogue'
+  }
+  return null
+}
+
+function formatCheckLine(msg: any): { line: string; style: string } {
+  const diffLabel = t(`game:difficulty.${msg.difficulty}`) || msg.difficulty
+  const outcomeStyle: Record<string, string> = {
+    CRITICAL_SUCCESS: 'check-crit-success',
+    SUCCESS: 'check-pass',
+    FAILURE: 'check-fail',
+    CRITICAL_FAILURE: 'check-crit-fail',
+  }
+  const result = msg.outcome
+    ? t(`game:outcome.${msg.outcome}`)
+    : (msg.passed ? t('game:outcome.SUCCESS') : t('game:outcome.FAILURE'))
+  const style = msg.outcome
+    ? (outcomeStyle[msg.outcome] ?? (msg.passed ? 'check-pass' : 'check-fail'))
+    : (msg.passed ? 'check-pass' : 'check-fail')
+
+  let modStr = ''
+  if (msg.modifiers && msg.modifiers.length > 0) {
+    const parts = msg.modifiers.map((m: any) => {
+      const sign = m.value >= 0 ? '+' : ''
+      return `${m.label}(${sign}${m.value})`
+    })
+    modStr = ` [${parts.join(', ')}]`
+  }
+  const targetStr = msg.modifiers && msg.modifiers.length > 0
+    ? `${msg.base_target}${modStr} → ${msg.target}`
+    : `${msg.target}`
+  const marginStr = msg.margin != null ? ` (${msg.margin >= 0 ? '+' : ''}${msg.margin})` : ''
+  const line = `\ud83c\udfb2 ${msg.attribute}[${diffLabel}]: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs ${targetStr} \u2192 ${result}${marginStr}`
+  return { line, style }
+}
 
 export function useEngine() {
   const engineRef = useRef<GameLoop | null>(null)
@@ -36,6 +90,10 @@ export function useEngine() {
         const engine = await createEngine()
         if (unmounted) return
         engineRef.current = engine
+
+        // Sync LLM language with current locale
+        const locale = store.getState().locale
+        engine.setLanguage(LOCALE_TO_LANGUAGE[locale])
 
         // Wire up the GameEventListener
         const listener = createListener(store, sessionMessagesRef)
@@ -63,7 +121,7 @@ export function useEngine() {
         if (!unmounted) {
           store.getState().setConnectionStatus('disconnected')
           store.getState().appendNarrative(
-            `[错误] 引擎初始化失败: ${err instanceof Error ? err.message : String(err)}`,
+            `${t('game:system.initFailed')}: ${err instanceof Error ? err.message : String(err)}`,
             'error',
           )
         }
@@ -103,8 +161,8 @@ function createListener(
       const baseClass = source === 'rejection' ? 'rejection'
         : source === 'inciting_event' ? 'inciting'
         : 'event'
-      const prefix = source === 'rejection' ? '[旁白] '
-        : source === 'inciting_event' ? '[序幕] '
+      const prefix = source === 'rejection' ? t('game:narrative.aside')
+        : source === 'inciting_event' ? t('game:narrative.prologue')
         : ''
 
       const normalized = text.replace(/\\n/g, '\n')
@@ -113,15 +171,8 @@ function createListener(
         s.appendNarrative(prefix + text, baseClass)
       } else {
         for (const para of paragraphs) {
-          if (/^「.*」$/.test(para)) {
-            s.appendNarrative(para, 'dialogue')
-          } else if (/^『.*』$/.test(para)) {
-            s.appendNarrative(para, 'sound')
-          } else if (/「.*」/.test(para)) {
-            s.appendNarrative(para, 'dialogue')
-          } else {
-            s.appendNarrative(para, baseClass)
-          }
+          const cls = classifyParagraph(para)
+          s.appendNarrative(para, cls ?? baseClass)
           s.appendNarrative('', 'spacer')
         }
       }
@@ -158,35 +209,7 @@ function createListener(
         }
         record(msg)
         const s = store.getState()
-        const diffLabel: Record<string, string> = { TRIVIAL: '轻松', ROUTINE: '普通', HARD: '困难', VERY_HARD: '极难', LEGENDARY: '传奇' }
-        const outcomeLabel: Record<string, string> = {
-          CRITICAL_SUCCESS: '大成功!',
-          SUCCESS: '成功',
-          FAILURE: '失败',
-          CRITICAL_FAILURE: '大失败!',
-        }
-        const outcomeStyle: Record<string, string> = {
-          CRITICAL_SUCCESS: 'check-crit-success',
-          SUCCESS: 'check-pass',
-          FAILURE: 'check-fail',
-          CRITICAL_FAILURE: 'check-crit-fail',
-        }
-        const result = msg.outcome ? outcomeLabel[msg.outcome] : (msg.passed ? '成功' : '失败')
-        const style = msg.outcome ? (outcomeStyle[msg.outcome] ?? (msg.passed ? 'check-pass' : 'check-fail')) : (msg.passed ? 'check-pass' : 'check-fail')
-        const diff = diffLabel[msg.difficulty] ?? msg.difficulty
-        let modStr = ''
-        if (msg.modifiers && msg.modifiers.length > 0) {
-          const parts = msg.modifiers.map((m) => {
-            const sign = m.value >= 0 ? '+' : ''
-            return `${m.label}(${sign}${m.value})`
-          })
-          modStr = ` [${parts.join(', ')}]`
-        }
-        const targetStr = msg.modifiers && msg.modifiers.length > 0
-          ? `基础${msg.base_target}${modStr} = 目标${msg.target}`
-          : `目标${msg.target}`
-        const marginStr = msg.margin != null ? ` (${msg.margin >= 0 ? '+' : ''}${msg.margin})` : ''
-        const line = `🎲 ${msg.attribute}检定[${diff}]: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs ${targetStr} → ${result}${marginStr}`
+        const { line, style } = formatCheckLine(msg)
         s.appendNarrative(line, style)
       }
     },
@@ -211,7 +234,7 @@ function createListener(
     onError(message: string, retryable?: boolean) {
       record({ type: 'error', message, retryable: retryable ?? false })
       const s = store.getState()
-      s.appendNarrative(`[错误] ${message}`, 'error')
+      s.appendNarrative(t('game:error.generic', { message }), 'error')
       if (retryable) {
         s.setRetryable(true)
       }
@@ -247,7 +270,7 @@ function createListener(
       s.appendNarrative('', 'spacer')
       s.appendNarrative(ws.background || '', 'world-bg')
       s.appendNarrative('', 'spacer')
-      s.appendNarrative(`你是 ${pc.name || ''}。${pc.background || ''}`, 'player-intro')
+      s.appendNarrative(t('game:narrative.playerIntro', { name: pc.name || '', background: pc.background || '' }), 'player-intro')
       s.appendNarrative('', 'spacer')
       s.appendNarrative('─────────────────────────────', 'separator')
       s.appendNarrative('', 'spacer')
@@ -317,7 +340,7 @@ async function handleMessage(
           return
         }
         if (initializingRef.current) {
-          store.getState().appendNarrative('正在初始化，请稍候…', 'system')
+          store.getState().appendNarrative(t('game:system.initializing'), 'system')
           return
         }
         const sessions = engine.listSessions()
@@ -330,18 +353,18 @@ async function handleMessage(
           )
           return
         }
-        store.getState().appendNarrative('当前没有进行中的游戏。', 'system')
-        store.getState().appendNarrative('请在右上角菜单中选择「新游戏」来开始冒险。', 'system')
+        store.getState().appendNarrative(t('game:system.noActiveGame'), 'system')
+        store.getState().appendNarrative(t('game:system.noActiveGameHint'), 'system')
         break
       }
 
       case 'new_game':
         if (!isLLMConfigured()) {
-          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API，才能开始游戏。', 'system')
+          store.getState().appendNarrative(t('game:system.llmNotConfigured'), 'system')
           return
         }
         if (initializingRef.current) {
-          store.getState().appendNarrative('[提示] 正在初始化中，请稍候…', 'system')
+          store.getState().appendNarrative(t('game:system.initializingHint'), 'system')
           return
         }
         // Reset current game if one is active
@@ -356,11 +379,11 @@ async function handleMessage(
 
       case 'select_style': {
         if (!isLLMConfigured()) {
-          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API。', 'system')
+          store.getState().appendNarrative(t('game:system.llmNotConfiguredShort'), 'system')
           return
         }
         if (!engine.isAwaitingStyleSelect) {
-          store.getState().appendNarrative('[错误] 当前不在风格选择阶段', 'error')
+          store.getState().appendNarrative(t('game:error.notInStyleSelect'), 'error')
           return
         }
         const idx = msg.preset_index
@@ -373,7 +396,7 @@ async function handleMessage(
           const s = STYLE_PRESETS[idx]
           style = { tone: s.tone, complexity: s.complexity, narrative_style: s.narrative_style, player_archetype: s.player_archetype }
         } else {
-          store.getState().appendNarrative('[错误] 无效的预设索引', 'error')
+          store.getState().appendNarrative(t('game:error.invalidPresetIndex'), 'error')
           return
         }
         initializingRef.current = true
@@ -387,11 +410,11 @@ async function handleMessage(
 
       case 'select_style_custom':
         if (!isLLMConfigured()) {
-          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API。', 'system')
+          store.getState().appendNarrative(t('game:system.llmNotConfiguredShort'), 'system')
           return
         }
         if (!engine.isAwaitingStyleSelect) {
-          store.getState().appendNarrative('[错误] 当前不在风格选择阶段', 'error')
+          store.getState().appendNarrative(t('game:error.notInStyleSelect'), 'error')
           return
         }
         initializingRef.current = true
@@ -409,7 +432,7 @@ async function handleMessage(
 
       case 'reroll_attributes':
         if (!engine.isAwaitingCharConfirm) {
-          store.getState().appendNarrative('[错误] 当前不在角色创建阶段', 'error')
+          store.getState().appendNarrative(t('game:error.notInCharCreate'), 'error')
           return
         }
         engine.rerollAttributes()
@@ -417,7 +440,7 @@ async function handleMessage(
 
       case 'confirm_attributes':
         if (!engine.isAwaitingCharConfirm) {
-          store.getState().appendNarrative('[错误] 当前不在角色创建阶段', 'error')
+          store.getState().appendNarrative(t('game:error.notInCharCreate'), 'error')
           return
         }
         await engine.confirmAttributes(msg.attributes as unknown as PlayerAttributes)
@@ -428,11 +451,11 @@ async function handleMessage(
 
       case 'input':
         if (!isLLMConfigured()) {
-          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API。', 'system')
+          store.getState().appendNarrative(t('game:system.llmNotConfiguredShort'), 'system')
           return
         }
         if (!initializedRef.current) {
-          store.getState().appendNarrative('[错误] 游戏尚未初始化', 'error')
+          store.getState().appendNarrative(t('game:error.gameNotInitialized'), 'error')
           return
         }
         store.getState().setChoices(null)
@@ -442,16 +465,16 @@ async function handleMessage(
 
       case 'select_choice': {
         if (!isLLMConfigured()) {
-          store.getState().appendNarrative('[提示] 请先在设置中配置大模型 API。', 'system')
+          store.getState().appendNarrative(t('game:system.llmNotConfiguredShort'), 'system')
           return
         }
         if (!initializedRef.current) {
-          store.getState().appendNarrative('[错误] 游戏尚未初始化', 'error')
+          store.getState().appendNarrative(t('game:error.gameNotInitialized'), 'error')
           return
         }
         const currentChoices = store.getState().choices
         if (!currentChoices || msg.index < 0 || msg.index >= currentChoices.length) {
-          store.getState().appendNarrative('[错误] 无效的选项', 'error')
+          store.getState().appendNarrative(t('game:error.invalidOption'), 'error')
           return
         }
         const selectedChoice = currentChoices[msg.index]
@@ -471,9 +494,9 @@ async function handleMessage(
       case 'save':
         try {
           const saveId = await engine.save()
-          store.getState().appendNarrative(`[系统] 存档成功: ${saveId.slice(0, 8)}…`, 'system')
+          store.getState().appendNarrative(t('game:system.saveSuccess', { id: saveId.slice(0, 8) }), 'system')
         } catch (err) {
-          store.getState().appendNarrative(`[系统] 存档失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
+          store.getState().appendNarrative(t('game:system.saveFailed', { message: err instanceof Error ? err.message : String(err) }), 'error')
         }
         break
 
@@ -483,14 +506,14 @@ async function handleMessage(
         initializingRef.current = false
         sessionMessagesRef.current = []
         store.getState().resetGame()
-        store.getState().appendNarrative('游戏已重置。', 'system')
+        store.getState().appendNarrative(t('game:system.gameReset'), 'system')
         // Re-initialize
         handleMessage(engine, { type: 'initialize' }, store, sessionMessagesRef, initializingRef, initializedRef)
         break
 
       case 'insist':
         if (!engine.isAwaitingInsist) {
-          store.getState().appendNarrative('[错误] 当前没有待确认的行动', 'error')
+          store.getState().appendNarrative(t('game:error.noPendingAction'), 'error')
           return
         }
         await engine.insist()
@@ -499,7 +522,7 @@ async function handleMessage(
       case 'abandon':
         if (!engine.isAwaitingInsist) return
         engine.abandon()
-        store.getState().appendNarrative('你改变了主意。', 'system')
+        store.getState().appendNarrative(t('game:system.changedMind'), 'system')
         break
 
       case 'retry':
@@ -537,7 +560,7 @@ async function handleMessage(
         await engine.saveSessionHistory(sessionMessagesRef.current)
         const switched = await engine.switchSession(msg.session_id)
         if (!switched) {
-          store.getState().appendNarrative('[错误] 无法切换到该存档', 'error')
+          store.getState().appendNarrative(t('game:error.cannotSwitchSession'), 'error')
           return
         }
         initializedRef.current = true
@@ -554,7 +577,7 @@ async function handleMessage(
             const s = store.getState()
             s.setInitDoc(gs.genesisDoc)
             s.setStatus(gs.currentLocation, gs.currentTurn)
-            s.appendNarrative(`已加载存档：${gs.currentLocation}，回合 ${gs.currentTurn}`, 'system')
+            s.appendNarrative(t('game:system.loadedSession', { location: gs.currentLocation, turn: gs.currentTurn }), 'system')
           }
         }
         break
@@ -592,9 +615,9 @@ async function handleMessage(
           saveLLMConfig(newConfig)
           engine.setProvider(newProvider)
           setLLMConfigured(true)
-          store.getState().appendNarrative('[系统] 大模型配置已保存', 'system')
+          store.getState().appendNarrative(t('game:system.configSaved'), 'system')
         } catch (err) {
-          store.getState().appendNarrative(`[错误] 配置无效: ${err instanceof Error ? err.message : String(err)}`, 'error')
+          store.getState().appendNarrative(t('game:system.configInvalid', { message: err instanceof Error ? err.message : String(err) }), 'error')
         }
         break
       }
@@ -620,7 +643,7 @@ async function handleMessage(
           })
           store.getState().setLLMModels(models)
         } catch (err) {
-          store.getState().appendNarrative(`[错误] 获取模型列表失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
+          store.getState().appendNarrative(t('game:system.modelListFailed', { message: err instanceof Error ? err.message : String(err) }), 'error')
         }
         break
 
@@ -646,7 +669,7 @@ async function handleMessage(
     }
   } catch (err) {
     store.getState().appendNarrative(
-      `[错误] ${err instanceof Error ? err.message : String(err)}`,
+      t('game:error.generic', { message: err instanceof Error ? err.message : String(err) }),
       'error',
     )
   }
@@ -679,8 +702,8 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
       const baseClass = msg.source === 'rejection' ? 'rejection'
         : msg.source === 'inciting_event' ? 'inciting'
         : 'event'
-      const prefix = msg.source === 'rejection' ? '[旁白] '
-        : msg.source === 'inciting_event' ? '[序幕] '
+      const prefix = msg.source === 'rejection' ? t('game:narrative.aside')
+        : msg.source === 'inciting_event' ? t('game:narrative.prologue')
         : ''
       const normalized = msg.text.replace(/\\n/g, '\n')
       const paragraphs = normalized.split(/\n\n+/).map((p: string) => p.trim()).filter(Boolean)
@@ -688,15 +711,8 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
         s.appendNarrative(prefix + msg.text, baseClass)
       } else {
         for (const para of paragraphs) {
-          if (/^「.*」$/.test(para)) {
-            s.appendNarrative(para, 'dialogue')
-          } else if (/^『.*』$/.test(para)) {
-            s.appendNarrative(para, 'sound')
-          } else if (/「.*」/.test(para)) {
-            s.appendNarrative(para, 'dialogue')
-          } else {
-            s.appendNarrative(para, baseClass)
-          }
+          const cls = classifyParagraph(para)
+          s.appendNarrative(para, cls ?? baseClass)
           s.appendNarrative('', 'spacer')
         }
       }
@@ -713,35 +729,7 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
       }
       break
     case 'check': {
-      const diffLabel: Record<string, string> = { TRIVIAL: '轻松', ROUTINE: '普通', HARD: '困难', VERY_HARD: '极难', LEGENDARY: '传奇' }
-      const outcomeLabel: Record<string, string> = {
-        CRITICAL_SUCCESS: '大成功!',
-        SUCCESS: '成功',
-        FAILURE: '失败',
-        CRITICAL_FAILURE: '大失败!',
-      }
-      const outcomeStyle: Record<string, string> = {
-        CRITICAL_SUCCESS: 'check-crit-success',
-        SUCCESS: 'check-pass',
-        FAILURE: 'check-fail',
-        CRITICAL_FAILURE: 'check-crit-fail',
-      }
-      const result = msg.outcome ? outcomeLabel[msg.outcome] : (msg.passed ? '成功' : '失败')
-      const style = msg.outcome ? (outcomeStyle[msg.outcome] ?? (msg.passed ? 'check-pass' : 'check-fail')) : (msg.passed ? 'check-pass' : 'check-fail')
-      const diff = diffLabel[msg.difficulty] ?? msg.difficulty
-      let modStr = ''
-      if (msg.modifiers && msg.modifiers.length > 0) {
-        const parts = msg.modifiers.map((m: any) => {
-          const sign = m.value >= 0 ? '+' : ''
-          return `${m.label}(${sign}${m.value})`
-        })
-        modStr = ` [${parts.join(', ')}]`
-      }
-      const targetStr = msg.modifiers && msg.modifiers.length > 0
-        ? `基础${msg.base_target}${modStr} = 目标${msg.target}`
-        : `目标${msg.target}`
-      const marginStr = msg.margin != null ? ` (${msg.margin >= 0 ? '+' : ''}${msg.margin})` : ''
-      const line = `🎲 ${msg.attribute}检定[${diff}]: d100(${msg.roll}) + ${msg.attribute}(${msg.attribute_value}) = ${msg.total} vs ${targetStr} → ${result}${marginStr}`
+      const { line, style } = formatCheckLine(msg)
       s.appendNarrative(line, style)
       break
     }
@@ -752,7 +740,7 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
       s.setStatus(msg.location, msg.turn)
       break
     case 'error':
-      s.appendNarrative(`[错误] ${msg.message}`, 'error')
+      s.appendNarrative(t('game:error.generic', { message: msg.message }), 'error')
       break
     case 'init_progress':
       s.appendNarrative(msg.step, 'system')
@@ -768,7 +756,7 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
       s.appendNarrative('', 'spacer')
       s.appendNarrative(ws.background || '', 'world-bg')
       s.appendNarrative('', 'spacer')
-      s.appendNarrative(`你是 ${pc.name || ''}。${pc.background || ''}`, 'player-intro')
+      s.appendNarrative(t('game:narrative.playerIntro', { name: pc.name || '', background: pc.background || '' }), 'player-intro')
       s.appendNarrative('', 'spacer')
       s.appendNarrative('─────────────────────────────', 'separator')
       s.appendNarrative('', 'spacer')
@@ -778,10 +766,10 @@ function replaySingleMessage(msg: any, store: typeof useGameStore) {
       s.setCharCreate({ attributes: msg.attributes, meta: msg.attribute_meta })
       break
     case 'save_result':
-      s.appendNarrative(`[系统] 存档成功: ${msg.saveId.slice(0, 8)}…`, 'system')
+      s.appendNarrative(t('game:system.saveSuccess', { id: msg.saveId.slice(0, 8) }), 'system')
       break
     case 'save_error':
-      s.appendNarrative(`[系统] 存档失败: ${msg.message}`, 'error')
+      s.appendNarrative(t('game:system.saveFailed', { message: msg.message }), 'error')
       break
   }
 }

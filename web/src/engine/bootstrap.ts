@@ -46,7 +46,7 @@ export async function createEngine(): Promise<GameLoop> {
   if (!provider) {
     provider = {
       async call() {
-        throw new Error('请先在设置中配置大模型 API')
+        throw new Error('LLM API not configured')
       },
     }
   }

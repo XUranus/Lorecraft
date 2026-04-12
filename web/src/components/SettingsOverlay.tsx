@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
 import { PROVIDERS, type ProviderFields, emptyFields, getModelPlaceholder } from '../shared/provider-defs'
 import './SettingsOverlay.css'
 
 export function SettingsOverlay() {
+  const t = useT()
   const open = useGameStore((s) => s.settingsOpen)
   const llmConfig = useGameStore((s) => s.llmConfig)
   const testResult = useGameStore((s) => s.llmTestResult)
@@ -96,19 +98,19 @@ export function SettingsOverlay() {
     <div className="settings-overlay" onClick={handleClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>设置</h2>
+          <h2>{t('tab.settings')}</h2>
           <button className="settings-close-btn" onClick={handleClose}>&#10005;</button>
         </div>
 
         <div className="settings-section">
-          <div className="settings-section-title">大模型配置</div>
+          <div className="settings-section-title">{t('settings.llmConfig')}</div>
 
           {isProcessing && (
-            <div className="settings-warn">回合进行中，无法修改配置</div>
+            <div className="settings-warn">{t('settings.processingWarn')}</div>
           )}
 
           <div className="settings-field">
-            <span className="settings-field-label">服务商</span>
+            <span className="settings-field-label">{t('settings.provider')}</span>
             <select className="settings-select" value={provider} onChange={(e) => handleProviderChange(e.target.value)} disabled={isProcessing}>
               {PROVIDERS.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
@@ -118,7 +120,7 @@ export function SettingsOverlay() {
 
           {showBaseUrl && (
             <div className="settings-field">
-              <span className="settings-field-label">API 地址</span>
+              <span className="settings-field-label">{t('settings.apiUrl')}</span>
               <input className="settings-input" type="text" value={fields.baseUrl}
                 onChange={(e) => updateField('baseUrl', e.target.value)}
                 placeholder={currentProvider?.baseUrlPlaceholder ?? 'https://api.example.com/v1'}
@@ -128,7 +130,7 @@ export function SettingsOverlay() {
           )}
 
           <div className="settings-field">
-            <span className="settings-field-label">API Key</span>
+            <span className="settings-field-label">{t('settings.apiKey')}</span>
             <div className="settings-key-row">
               <input className="settings-input settings-key-input"
                 type={showKey ? 'text' : 'password'} value={fields.apiKey}
@@ -136,19 +138,19 @@ export function SettingsOverlay() {
                 placeholder={currentProvider?.keyPlaceholder ?? 'sk-...'}
                 disabled={isProcessing} />
               <button className="settings-eye-btn" type="button" onClick={() => setShowKey(!showKey)}
-                title={showKey ? '隐藏' : '显示'}>
+                title={showKey ? t('settings.hideKey') : t('settings.showKey')}>
                 {showKey ? '\u25C9' : '\u25CE'}
               </button>
             </div>
           </div>
 
           <div className="settings-field">
-            <span className="settings-field-label">模型</span>
+            <span className="settings-field-label">{t('settings.model')}</span>
             <div className="settings-model-row">
               {modelList && modelList.length > 0 ? (
                 <select className="settings-select settings-model-select" value={fields.model}
                   onChange={(e) => updateField('model', e.target.value)} disabled={isProcessing}>
-                  <option value="">默认模型</option>
+                  <option value="">{t('settings.defaultModel')}</option>
                   {modelList.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               ) : (
@@ -157,23 +159,23 @@ export function SettingsOverlay() {
                   placeholder={getModelPlaceholder(provider)} disabled={isProcessing} />
               )}
               <button className="settings-fetch-btn" disabled={!canTest || loadingModels} onClick={handleListModels}>
-                {loadingModels ? '...' : '获取列表'}
+                {loadingModels ? '...' : t('settings.fetchModels')}
               </button>
             </div>
           </div>
 
           <div className="settings-actions">
             <button className="settings-test-btn" disabled={!canTest || testing} onClick={handleTest}>
-              {testing ? '测试中...' : '测试连接'}
+              {testing ? t('settings.testing') : t('settings.testConnection')}
             </button>
             <button className="settings-save-btn" disabled={!canSave} onClick={handleSave}>
-              保存并应用
+              {t('settings.saveApply')}
             </button>
           </div>
 
           {testResult && (
             <div className={`settings-test-result ${testResult.success ? 'success' : 'fail'}`}>
-              {testResult.success ? '连接成功' : `连接失败: ${testResult.message}`}
+              {testResult.success ? t('settings.connectSuccess') : t('settings.connectFail', { message: testResult.message })}
             </div>
           )}
         </div>

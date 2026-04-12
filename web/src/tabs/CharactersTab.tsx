@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
 import { registerTab } from './registry'
 import type { CharacterInfo } from '../types/protocol'
 import './CharactersTab.css'
-
-const ATTR_NAMES: Record<string, string> = {
-  strength: '力量', constitution: '体质', agility: '敏捷', intelligence: '智力',
-  perception: '感知', willpower: '意志', charisma: '魅力', luck: '幸运',
-}
 
 function attrTierColor(val: number): string {
   if (val > 90) return 'var(--title)'       // tier-4: accent
@@ -18,6 +14,7 @@ function attrTierColor(val: number): string {
 }
 
 function CharactersTab() {
+  const t = useT()
   const send = useGameStore((s) => s.send)
   const playerInfo = useGameStore((s) => s.playerInfo)
   const npcList = useGameStore((s) => s.npcList)
@@ -46,7 +43,7 @@ function CharactersTab() {
             onClick={() => setSelectedId(playerInfo.id)}
           >
             <span className="char-sidebar-name">{playerInfo.name}</span>
-            <span className="char-sidebar-tag player">玩家</span>
+            <span className="char-sidebar-tag player">{t('characters.player')}</span>
           </button>
         )}
         {npcList.map((npc) => (
@@ -59,7 +56,7 @@ function CharactersTab() {
           </button>
         ))}
         {!playerInfo && npcList.length === 0 && (
-          <div className="char-sidebar-empty">加载中…</div>
+          <div className="char-sidebar-empty">{t('characters.loading')}</div>
         )}
       </div>
 
@@ -71,20 +68,20 @@ function CharactersTab() {
             {/* Player: background + attributes */}
             {isPlayer && selected.background && (
               <section className="char-section">
-                <h3>背景</h3>
+                <h3>{t('characters.background')}</h3>
                 <p>{selected.background}</p>
               </section>
             )}
 
             {isPlayer && selected.attributes && (
               <section className="char-section">
-                <h3>属性</h3>
+                <h3>{t('characters.attributes')}</h3>
                 <div className="char-attrs">
                   {Object.entries(selected.attributes).map(([key, val]) => {
                     const color = attrTierColor(val as number)
                     return (
                       <div key={key} className="char-attr-row">
-                        <span className="char-attr-name">{ATTR_NAMES[key] ?? key}</span>
+                        <span className="char-attr-name">{t(`attrName.${key}`)}</span>
                         <div className="char-attr-bar-bg">
                           <div className="char-attr-bar" style={{ width: `${val}%`, background: color }} />
                         </div>
@@ -100,27 +97,27 @@ function CharactersTab() {
             {!isPlayer && (() => {
               const hasContent = selected.first_impression || selected.relationship_to_player || (selected.known_facts && selected.known_facts.length > 0)
               if (!hasContent) {
-                return <p className="char-no-info">尚未深入了解此人。</p>
+                return <p className="char-no-info">{t('characters.noInfo')}</p>
               }
               return (
                 <>
                   {selected.first_impression && (
                     <section className="char-section">
-                      <h3>印象</h3>
+                      <h3>{t('characters.impression')}</h3>
                       <p>{selected.first_impression}</p>
                     </section>
                   )}
 
                   {selected.relationship_to_player && (
                     <section className="char-section">
-                      <h3>与你的关系</h3>
+                      <h3>{t('characters.relationship')}</h3>
                       <p>{selected.relationship_to_player}</p>
                     </section>
                   )}
 
                   {selected.known_facts && selected.known_facts.length > 0 && (
                     <section className="char-section">
-                      <h3>已知信息</h3>
+                      <h3>{t('characters.knownFacts')}</h3>
                       <ul className="char-known-facts">
                         {selected.known_facts.map((fact, i) => (
                           <li key={i}>{fact}</li>
@@ -131,11 +128,11 @@ function CharactersTab() {
 
                   {selected.last_seen_location && (
                     <section className="char-section">
-                      <h3>最后见面</h3>
+                      <h3>{t('characters.lastSeen')}</h3>
                       <div className="char-last-seen">
-                        <span>地点：{selected.last_seen_location}</span>
+                        <span>{t('characters.lastSeenLocation', { location: selected.last_seen_location })}</span>
                         {selected.last_interaction_turn != null && selected.last_interaction_turn > 0 && (
-                          <span>第 {selected.last_interaction_turn} 回合</span>
+                          <span>{t('characters.lastSeenTurn', { turn: selected.last_interaction_turn })}</span>
                         )}
                       </div>
                     </section>
@@ -145,11 +142,11 @@ function CharactersTab() {
             })()}
           </>
         ) : (
-          <div className="char-detail-empty">选择一个角色</div>
+          <div className="char-detail-empty">{t('characters.selectHint')}</div>
         )}
       </div>
     </div>
   )
 }
 
-registerTab({ id: 'characters', label: '人物', component: CharactersTab })
+registerTab({ id: 'characters', labelKey: 'tab.characters', component: CharactersTab })

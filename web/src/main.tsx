@@ -17,6 +17,12 @@ if (savedTheme === 'parchment' || savedTheme === 'moonlight' || savedTheme === '
   document.documentElement.dataset.theme = savedTheme
 }
 
+// Restore saved locale before first paint
+const savedLocale = localStorage.getItem('lorecraft:locale')
+if (savedLocale) {
+  document.documentElement.lang = savedLocale
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

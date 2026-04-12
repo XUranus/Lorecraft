@@ -1,13 +1,11 @@
 import { useState, useRef, type KeyboardEvent } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
 import type { ChoiceForClient } from '../types/protocol'
 import './BottomBar.css'
 
-const DIFF_LABELS: Record<string, string> = {
-  TRIVIAL: '轻松', ROUTINE: '普通', HARD: '困难', VERY_HARD: '极难', LEGENDARY: '传奇',
-}
-
 export function BottomBar() {
+  const t = useT()
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const send = useGameStore((s) => s.send)
@@ -41,7 +39,7 @@ export function BottomBar() {
   function handleInsist() {
     useGameStore.getState().setInsistencePrompt(false)
     useGameStore.getState().setProcessing(true)
-    useGameStore.getState().appendNarrative('> [坚持行动]', 'player-input')
+    useGameStore.getState().appendNarrative(t('bottomBar.insistAction'), 'player-input')
     send({ type: 'insist' })
   }
 
@@ -74,34 +72,34 @@ export function BottomBar() {
     <footer className="bottom-bar">
       <div className="status-bar">
         {location && <span className="status-location">{location}</span>}
-        {turn > 0 && <span className="status-turn">回合 {turn}</span>}
-        {isProcessing && <span className="status-processing">思考中…</span>}
+        {turn > 0 && <span className="status-turn">{t('bottomBar.turn', { turn })}</span>}
+        {isProcessing && <span className="status-processing">{t('bottomBar.thinking')}</span>}
       </div>
       {retryable ? (
         <div className="insistence-row retry">
-          <span className="insistence-hint">生成出错，可能是AI输出格式异常。</span>
+          <span className="insistence-hint">{t('bottomBar.retryHint')}</span>
           <button className="insist-btn insist-confirm retry-variant" onClick={handleRetry}>
-            重试
+            {t('bottomBar.retry')}
           </button>
           <button className="insist-btn insist-abandon" onClick={handleSkipRetry}>
-            跳过
+            {t('bottomBar.skip')}
           </button>
         </div>
       ) : insistencePrompt ? (
         <div className="insistence-row">
-          <span className="insistence-hint">你的内心声音强烈不建议你这么做。</span>
+          <span className="insistence-hint">{t('bottomBar.insistenceHint')}</span>
           <button className="insist-btn insist-confirm" onClick={handleInsist}>
-            坚持行动
+            {t('bottomBar.insist')}
           </button>
           <button className="insist-btn insist-abandon" onClick={handleAbandon}>
-            改变主意
+            {t('bottomBar.abandon')}
           </button>
         </div>
       ) : (
         <div className={`input-zone ${isProcessing ? 'processing' : ''}`}>
           {hasChoices && (
             <div className="suggestions">
-              <span className="suggestions-label">建议行动</span>
+              <span className="suggestions-label">{t('bottomBar.suggestActions')}</span>
               <div className="suggestion-pills">
                 {choices!.map((choice, i) => (
                   <ChoicePill key={i} choice={choice} index={i} onSelect={handleSelectChoice} />
@@ -117,7 +115,7 @@ export function BottomBar() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder={inputEnabled ? '输入你的行动…' : '等待中…'}
+              placeholder={inputEnabled ? t('bottomBar.inputPlaceholder') : t('bottomBar.waitPlaceholder')}
               disabled={!inputEnabled}
             />
             <button
@@ -125,7 +123,7 @@ export function BottomBar() {
               onClick={submit}
               disabled={!inputEnabled || !input.trim()}
             >
-              发送
+              {t('bottomBar.send')}
             </button>
           </div>
         </div>
@@ -135,7 +133,9 @@ export function BottomBar() {
 }
 
 function ChoicePill({ choice, index, onSelect }: { choice: ChoiceForClient; index: number; onSelect: (i: number) => void }) {
+  const t = useT()
   const check = choice.check
+  const diffLabel = check ? t(`game:difficulty.${check.difficulty}`) : ''
   return (
     <button className="suggestion-pill" onClick={() => onSelect(index)}>
       <span className="pill-key">{index === 0 ? 'A' : 'B'}</span>
@@ -143,7 +143,7 @@ function ChoicePill({ choice, index, onSelect }: { choice: ChoiceForClient; inde
         {choice.text}
         {check && (
           <span className={`pill-check ${getChanceClass(check.pass_chance)}`}>
-            {check.attribute_display_name} {DIFF_LABELS[check.difficulty] ?? check.difficulty} <span className="pill-chance">{check.pass_chance}%</span>
+            {check.attribute_display_name} {diffLabel} <span className="pill-chance">{check.pass_chance}%</span>
           </span>
         )}
       </span>

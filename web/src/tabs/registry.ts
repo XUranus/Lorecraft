@@ -2,7 +2,8 @@ import type { ComponentType } from 'react'
 
 export interface TabDefinition {
   id: string
-  label: string
+  /** i18n key under ui namespace, e.g. 'tab.narrative' */
+  labelKey: string
 
   component: ComponentType
 }

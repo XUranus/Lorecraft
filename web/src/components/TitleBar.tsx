@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
 import { getThemeMeta, getNextThemeId } from '../theme/themes'
 import './TitleBar.css'
 
@@ -10,6 +11,7 @@ const THEME_GLYPH: Record<string, string> = {
 }
 
 export function TitleBar() {
+  const t = useT()
   const send = useGameStore((s) => s.send)
   const turn = useGameStore((s) => s.turn)
   const theme = useGameStore((s) => s.theme)
@@ -45,6 +47,8 @@ export function TitleBar() {
 
   const currentMeta = getThemeMeta(theme)
   const nextMeta = getThemeMeta(getNextThemeId(theme))
+  const currentLabel = t(`theme.${currentMeta.id}.label`)
+  const nextLabel = t(`theme.${nextMeta.id}.label`)
 
   return (
     <header className="title-bar">
@@ -53,20 +57,20 @@ export function TitleBar() {
         <button
           className="titlebar-theme"
           onClick={cycleTheme}
-          title={`主题：${currentMeta.label} → ${nextMeta.label}`}
-          aria-label={`切换主题（当前：${currentMeta.label}）`}
+          title={t('titlebar.themeTooltip', { current: currentLabel, next: nextLabel })}
+          aria-label={t('titlebar.themeAriaLabel', { current: currentLabel })}
         >
           <span className="titlebar-theme-glyph">{THEME_GLYPH[theme] ?? '\u25D0'}</span>
         </button>
         <button className="titlebar-action" onClick={handleSessions}>
-          存档管理
+          {t('titlebar.saveManager')}
         </button>
         <button
           ref={confirmRef}
           className={`titlebar-action${confirmNew ? ' confirm' : ''}`}
           onClick={handleNewGame}
         >
-          {confirmNew ? '确认新游戏？' : '新游戏'}
+          {confirmNew ? t('titlebar.confirmNewGame') : t('titlebar.newGame')}
         </button>
       </div>
     </header>

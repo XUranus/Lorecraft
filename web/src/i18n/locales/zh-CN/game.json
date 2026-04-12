@@ -1,0 +1,41 @@
+{
+  "difficulty.TRIVIAL": "轻松",
+  "difficulty.ROUTINE": "普通",
+  "difficulty.HARD": "困难",
+  "difficulty.VERY_HARD": "极难",
+  "difficulty.LEGENDARY": "传奇",
+
+  "outcome.CRITICAL_SUCCESS": "大成功!",
+  "outcome.SUCCESS": "成功",
+  "outcome.FAILURE": "失败",
+  "outcome.CRITICAL_FAILURE": "大失败!",
+
+  "narrative.aside": "[旁白] ",
+  "narrative.prologue": "[序幕] ",
+  "narrative.playerIntro": "你是 {{name}}。{{background}}",
+
+  "system.initFailed": "[错误] 引擎初始化失败",
+  "system.initializing": "正在初始化，请稍候…",
+  "system.initializingHint": "[提示] 正在初始化中，请稍候…",
+  "system.noActiveGame": "当前没有进行中的游戏。",
+  "system.noActiveGameHint": "请在右上角菜单中选择「新游戏」来开始冒险。",
+  "system.llmNotConfigured": "[提示] 请先在设置中配置大模型 API，才能开始游戏。",
+  "system.llmNotConfiguredShort": "[提示] 请先在设置中配置大模型 API。",
+  "system.configSaved": "[系统] 大模型配置已保存",
+  "system.configInvalid": "[错误] 配置无效: {{message}}",
+  "system.modelListFailed": "[错误] 获取模型列表失败: {{message}}",
+  "system.gameReset": "游戏已重置。",
+  "system.changedMind": "你改变了主意。",
+  "system.saveSuccess": "[系统] 存档成功: {{id}}…",
+  "system.saveFailed": "[系统] 存档失败: {{message}}",
+  "system.loadedSession": "已加载存档：{{location}}，回合 {{turn}}",
+
+  "error.generic": "[错误] {{message}}",
+  "error.notInStyleSelect": "[错误] 当前不在风格选择阶段",
+  "error.invalidPresetIndex": "[错误] 无效的预设索引",
+  "error.notInCharCreate": "[错误] 当前不在角色创建阶段",
+  "error.gameNotInitialized": "[错误] 游戏尚未初始化",
+  "error.invalidOption": "[错误] 无效的选项",
+  "error.noPendingAction": "[错误] 当前没有待确认的行动",
+  "error.cannotSwitchSession": "[错误] 无法切换到该存档"
+}

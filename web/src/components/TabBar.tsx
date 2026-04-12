@@ -1,4 +1,5 @@
 import { tabs, type TabDefinition } from '../tabs/registry'
+import { useT } from '../i18n'
 import './TabBar.css'
 
 interface Props {
@@ -8,16 +9,17 @@ interface Props {
 }
 
 export function TabBar({ activeTab, onSelect, items }: Props) {
+  const t = useT()
   const list = items ?? tabs
   return (
     <nav className="tab-bar">
-      {list.map((t) => (
+      {list.map((tab) => (
         <button
-          key={t.id}
-          className={`tab-btn ${t.id === activeTab ? 'active' : ''}`}
-          onClick={() => onSelect(t.id)}
+          key={tab.id}
+          className={`tab-btn ${tab.id === activeTab ? 'active' : ''}`}
+          onClick={() => onSelect(tab.id)}
         >
-          {t.label}
+          {t(tab.labelKey)}
         </button>
       ))}
     </nav>

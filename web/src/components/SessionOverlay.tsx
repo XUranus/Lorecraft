@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useGameStore } from '../stores/useGameStore'
+import { useT } from '../i18n'
 import type { SessionEntry } from '../stores/useGameStore'
 import './SessionOverlay.css'
 
@@ -10,6 +11,7 @@ function formatTime(epoch: number): string {
 }
 
 export function SessionOverlay() {
+  const t = useT()
   const sessions = useGameStore((s) => s.sessionList)
   const send = useGameStore((s) => s.send)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -43,30 +45,30 @@ export function SessionOverlay() {
     <div className="session-overlay">
       <div className="session-panel">
         <div className="session-header">
-          <h2>存档管理</h2>
+          <h2>{t('session.title')}</h2>
           <button className="session-close-btn" onClick={handleClose}>&#10005;</button>
         </div>
 
         <div className="session-list">
           {sessions.length === 0 ? (
-            <div className="session-empty">暂无存档</div>
+            <div className="session-empty">{t('session.empty')}</div>
           ) : (
             sessions.map((s) => (
               <div key={s.id} className="session-card" onClick={() => handleSwitch(s)}>
                 <div className="session-card-main">
-                  <div className="session-label">{s.label || '未命名'}</div>
+                  <div className="session-label">{s.label || t('session.unnamed')}</div>
                   <div className="session-meta">
                     <span>{s.location}</span>
-                    <span>回合 {s.turn}</span>
+                    <span>{t('session.turn', { turn: s.turn })}</span>
                     <span>{formatTime(s.updated_at)}</span>
                   </div>
                 </div>
                 <button
                   className={`session-delete-btn ${confirmDelete === s.id ? 'confirm' : ''}`}
                   onClick={(e) => { e.stopPropagation(); handleDelete(s.id) }}
-                  title="删除"
+                  title={t('session.delete')}
                 >
-                  {confirmDelete === s.id ? '确认？' : '\u2715'}
+                  {confirmDelete === s.id ? t('session.confirmDelete') : '\u2715'}
                 </button>
               </div>
             ))
@@ -74,7 +76,7 @@ export function SessionOverlay() {
         </div>
 
         <button className="session-new-btn" onClick={handleNew}>
-          + 新游戏
+          {t('session.newGame')}
         </button>
       </div>
     </div>

@@ -59,6 +59,10 @@ export class AgentRunner {
     this.provider = provider
   }
 
+  setLanguage(lang: string): void {
+    this.language = lang
+  }
+
   constructor(provider: ILLMProvider, options?: AgentRunnerOptions) {
     this.provider = provider
     this.timeout = options?.timeout_ms ?? 30_000
@@ -73,7 +77,7 @@ export class AgentRunner {
     this.turnCounter = turnNumber
     if (this.logger) {
       const sep = '═'.repeat(80)
-      this.logger.append(`\n${sep}\n  TURN ${turnNumber}${playerInput ? `  |  玩家输入: ${playerInput}` : ''}\n${sep}\n\n`)
+      this.logger.append(`\n${sep}\n  TURN ${turnNumber}${playerInput ? `  |  Player input: ${playerInput}` : ''}\n${sep}\n\n`)
     }
   }
 

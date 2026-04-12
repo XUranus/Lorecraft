@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ClientMessage, CharacterInfo, ChoiceForClient, GameplayOptions, QuestGraphForClient } from '../types/protocol'
 import { type ThemeId, DEFAULT_THEME, isThemeId, getNextThemeId } from '../theme/themes'
+import { type LocaleId, DEFAULT_LOCALE, STORAGE_KEY as LOCALE_STORAGE_KEY, isLocaleId } from '../i18n/locales'
 import { clearPaletteCache } from '../tabs/quest-colors'
 
 export interface NarrativeLine {
@@ -121,6 +122,9 @@ interface GameState {
   // Theme
   theme: ThemeId
 
+  // Locale
+  locale: LocaleId
+
   // Actions
   setConnectionStatus: (s: GameState['connectionStatus']) => void
   setSend: (fn: (msg: ClientMessage) => void) => void
@@ -152,11 +156,17 @@ interface GameState {
   debugAddError: (entry: DebugErrorEntry) => void
   setTheme: (t: ThemeId) => void
   cycleTheme: () => void
+  setLocale: (l: LocaleId) => void
 }
 
 function readInitialTheme(): ThemeId {
   const saved = localStorage.getItem('lorecraft:theme')
   return isThemeId(saved) ? saved : DEFAULT_THEME
+}
+
+function readInitialLocale(): LocaleId {
+  const saved = localStorage.getItem(LOCALE_STORAGE_KEY)
+  return isLocaleId(saved) ? saved : DEFAULT_LOCALE
 }
 
 const noop = () => {}
@@ -209,6 +219,8 @@ export const useGameStore = create<GameState>((set) => ({
   debugErrors: [],
 
   theme: readInitialTheme(),
+
+  locale: readInitialLocale(),
 
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setSend: (send) => set({ send }),
@@ -310,5 +322,13 @@ export const useGameStore = create<GameState>((set) => ({
     document.documentElement.dataset.theme = next
     clearPaletteCache()
     set({ theme: next })
+  },
+
+  setLocale: (l) => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, l)
+    document.documentElement.lang = l
+    // i18n.changeLanguage is called by the consumer (useEngine / SettingsTab)
+    // to avoid circular imports between store and i18n module
+    set({ locale: l })
   },
 }))
