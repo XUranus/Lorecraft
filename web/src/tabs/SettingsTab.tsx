@@ -230,7 +230,6 @@ function SettingsTab() {
                 <span className="theme-swatch" style={{ background: tm.swatch.fg }} />
               </div>
               <div className="theme-card-name">{t(`theme.${tm.id}.label`)}</div>
-              <div className="theme-card-desc">{t(`theme.${tm.id}.description`)}</div>
             </button>
           ))}
         </div>

@@ -2,7 +2,7 @@ export type LocaleId = 'zh-CN' | 'en' | 'ja'
 
 export const LOCALES: readonly LocaleId[] = ['zh-CN', 'en', 'ja'] as const
 
-export const DEFAULT_LOCALE: LocaleId = 'zh-CN'
+export const DEFAULT_LOCALE: LocaleId = 'en'
 
 export const STORAGE_KEY = 'lorecraft:locale'
 
