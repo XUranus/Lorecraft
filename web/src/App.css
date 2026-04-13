@@ -31,6 +31,18 @@
   opacity: 0.5;
 }
 
+/* Atmospheric depth layer — soft ambient light pools behind content */
+.app-shell > .atmosphere {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgb(var(--title-rgb) / 0.03) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 80%, rgb(var(--title-rgb) / 0.02) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 40% at 50% 100%, rgb(var(--title-rgb) / 0.04) 0%, transparent 60%);
+}
+
 .tab-content {
   flex: 1;
   display: flex;

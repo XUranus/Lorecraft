@@ -74,6 +74,9 @@
   --title-rgb:   196 149 106;
   --border-accent: rgb(var(--title-rgb) / 0.25);
 
+  /* Additive glow blend for key headings (disabled on light themes) */
+  --title-blend: plus-lighter;
+
   /* Semantic colors */
   --narrative:   #c0b8b0;
   --voice:       #7090b8;
@@ -233,12 +236,12 @@
   --bg-panel:    #07262a;
   --bg-input:    #052020;
   --bg-elevated: #0a3034;
-  --bg-hover:    rgba(255, 230, 203, 0.04);
-  --surface-tint-1: rgba(255, 230, 203, 0.03);
-  --surface-tint-2: rgba(255, 230, 203, 0.05);
-  --surface-tint-3: rgba(255, 230, 203, 0.08);
-  --edge-highlight-sm: rgba(255, 230, 203, 0.04);
-  --edge-highlight-md: rgba(255, 230, 203, 0.07);
+  --bg-hover:    color-mix(in srgb, #ffe6cb 4%, transparent);
+  --surface-tint-1: color-mix(in srgb, #ffe6cb 3%, transparent);
+  --surface-tint-2: color-mix(in srgb, #ffe6cb 5%, transparent);
+  --surface-tint-3: color-mix(in srgb, #ffe6cb 8%, transparent);
+  --edge-highlight-sm: color-mix(in srgb, #ffe6cb 4%, transparent);
+  --edge-highlight-md: color-mix(in srgb, #ffe6cb 7%, transparent);
 
   --fg:          #c8c0b4;
   --fg-muted:    #7a7468;
@@ -251,7 +254,7 @@
   --title-dim:   #c8a882;
   --highlight:   #ffd4a0;
   --title-rgb:   255 200 160;
-  --border-accent: rgb(var(--title-rgb) / 0.22);
+  --border-accent: color-mix(in srgb, #ffe6cb 22%, transparent);
 
   --narrative:   #c8c0b4;
   --voice:       #78b8c8;
@@ -268,11 +271,11 @@
   --scrollbar-thumb:       #1a4044;
   --scrollbar-thumb-hover: #285058;
 
-  --shadow-overlay:  0 8px 40px rgba(0, 0, 0, 0.65), 0 0 1px rgb(var(--title-rgb) / 0.12);
+  --shadow-overlay:  0 8px 40px rgba(0, 0, 0, 0.65), 0 0 1px color-mix(in srgb, #ffe6cb 12%, transparent);
   --shadow-dropdown: 0 6px 20px rgba(0, 0, 0, 0.55);
-  --shadow-glow:     0 0 30px rgb(var(--title-rgb) / 0.10);
+  --shadow-glow:     0 0 30px color-mix(in srgb, #ffe6cb 10%, transparent);
 
-  --selection-bg: rgb(var(--title-rgb) / 0.20);
+  --selection-bg: color-mix(in srgb, #ffe6cb 20%, transparent);
 
   --vignette-edge: rgba(0, 0, 0, 0.45);
 
@@ -329,6 +332,9 @@
   --highlight:   #a8703a;
   --title-rgb:   138 90 42;
   --border-accent: rgb(var(--title-rgb) / 0.35);
+
+  /* Disable additive blend on light background */
+  --title-blend: normal;
 
   --narrative:   #3a2f1f;
   --voice:       #405878;

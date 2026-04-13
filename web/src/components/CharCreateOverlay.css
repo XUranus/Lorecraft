@@ -32,6 +32,7 @@
   margin: 0 0 4px;
   text-align: center;
   letter-spacing: 1px;
+  mix-blend-mode: var(--title-blend);
 }
 
 .char-create-subtitle {

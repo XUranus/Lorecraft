@@ -51,6 +51,7 @@
   font-weight: 700;
   letter-spacing: 1.6px;
   text-transform: uppercase;
+  mix-blend-mode: var(--title-blend);
   margin-bottom: 18px;
   padding-bottom: 0;
   border-bottom: none;

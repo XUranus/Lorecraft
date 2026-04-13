@@ -93,6 +93,7 @@ export function App() {
 
   return (
     <div className="app-shell">
+      <div className="atmosphere" />
       <TitleBar />
       {isDesktop ? (
         <div className="desktop-body">
