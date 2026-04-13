@@ -47,6 +47,16 @@ function runSql(db: SqlJsDatabase, sql: string, params?: any[]): void {
   db.run(sql, params)
 }
 
+function hasColumn(db: SqlJsDatabase, table: string, column: string): boolean {
+  try {
+    const stmt = db.prepare(`SELECT ${column} FROM ${table} LIMIT 1`)
+    stmt.free()
+    return true
+  } catch {
+    return false
+  }
+}
+
 // ============================================================
 // SqlJsStore — IStoreFactory backed by sql.js (WASM SQLite)
 // ============================================================
@@ -87,7 +97,6 @@ export class SqlJsStore implements IStoreFactory {
     this.db.run('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
     const row = queryOne(this.db, 'SELECT value FROM meta WHERE key = ?', ['schema_version'])
     const currentVersion = row ? parseInt(row.value, 10) : 0
-    if (currentVersion >= SCHEMA_VERSION) return
 
     this.db.run(CREATE_TABLES)
 
@@ -102,15 +111,25 @@ export class SqlJsStore implements IStoreFactory {
       // FTS5 not compiled in — full-text search won't be available but core functionality works
     }
 
-    if (currentVersion < 3) {
-      try { this.db.run("ALTER TABLE events ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
-      try { this.db.run("ALTER TABLE npc_memories ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
-      try { this.db.run("ALTER TABLE lore ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
+    let migratedToSessionScope = false
+    if (!hasColumn(this.db, 'events', 'session_id')) {
+      this.db.run("ALTER TABLE events ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+      migratedToSessionScope = true
+    }
+    if (!hasColumn(this.db, 'npc_memories', 'session_id')) {
+      this.db.run("ALTER TABLE npc_memories ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+      migratedToSessionScope = true
+    }
+    if (!hasColumn(this.db, 'lore', 'session_id')) {
+      this.db.run("ALTER TABLE lore ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+      migratedToSessionScope = true
+    }
 
-      this.db.run('CREATE INDEX IF NOT EXISTS idx_events_session_turn ON events(session_id, turn)')
-      this.db.run('CREATE INDEX IF NOT EXISTS idx_mem_session_npc ON npc_memories(session_id, npc_id, recorded_at_turn)')
-      this.db.run('CREATE INDEX IF NOT EXISTS idx_lore_session_hash ON lore(session_id, content_hash)')
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_events_session_turn ON events(session_id, turn)')
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_mem_session_npc ON npc_memories(session_id, npc_id, recorded_at_turn)')
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_lore_session_hash ON lore(session_id, content_hash)')
 
+    if (currentVersion < 3 || migratedToSessionScope) {
       this.db.run('DELETE FROM event_participants')
       this.db.run('DELETE FROM events')
       this.db.run('DELETE FROM memory_participants')

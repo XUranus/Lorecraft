@@ -5,6 +5,43 @@ export interface ISchemaDatabase {
   pragma?(sql: string): any
 }
 
+function hasColumn(db: ISchemaDatabase, table: string, column: string): boolean {
+  const rows = db.pragma?.(`table_info(${table})`) as Array<{ name: string }> | undefined
+  if (rows && Array.isArray(rows)) {
+    return rows.some((row) => row.name === column)
+  }
+
+  try {
+    const row = db.prepare(`SELECT ${column} FROM ${table} LIMIT 1`).get()
+    return row !== undefined
+  } catch {
+    return false
+  }
+}
+
+function ensureSessionScopedColumns(db: ISchemaDatabase): boolean {
+  let migrated = false
+
+  if (!hasColumn(db, 'events', 'session_id')) {
+    db.exec("ALTER TABLE events ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+    migrated = true
+  }
+  if (!hasColumn(db, 'npc_memories', 'session_id')) {
+    db.exec("ALTER TABLE npc_memories ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+    migrated = true
+  }
+  if (!hasColumn(db, 'lore', 'session_id')) {
+    db.exec("ALTER TABLE lore ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+    migrated = true
+  }
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_events_session_turn ON events(session_id, turn)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_mem_session_npc ON npc_memories(session_id, npc_id, recorded_at_turn)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_lore_session_hash ON lore(session_id, content_hash)')
+
+  return migrated
+}
+
 // ============================================================
 // Schema version — bump when adding migrations
 // ============================================================
@@ -305,8 +342,6 @@ export function initializeSchema(db: ISchemaDatabase): void {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get('schema_version') as { value: string } | undefined
   const currentVersion = row ? parseInt(row.value, 10) : 0
 
-  if (currentVersion >= SCHEMA_VERSION) return
-
   db.exec(CREATE_TABLES)
   db.exec(CREATE_FTS)
 
@@ -316,15 +351,8 @@ export function initializeSchema(db: ISchemaDatabase): void {
     if (trimmed) db.exec(trimmed)
   }
 
-  if (currentVersion < 3) {
-    try { db.exec("ALTER TABLE events ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
-    try { db.exec("ALTER TABLE npc_memories ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
-    try { db.exec("ALTER TABLE lore ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
-
-    db.exec('CREATE INDEX IF NOT EXISTS idx_events_session_turn ON events(session_id, turn)')
-    db.exec('CREATE INDEX IF NOT EXISTS idx_mem_session_npc ON npc_memories(session_id, npc_id, recorded_at_turn)')
-    db.exec('CREATE INDEX IF NOT EXISTS idx_lore_session_hash ON lore(session_id, content_hash)')
-
+  const migratedToSessionScope = ensureSessionScopedColumns(db)
+  if (currentVersion < 3 || migratedToSessionScope) {
     // Old runtime data was not session-scoped. Drop it while preserving sessions,
     // genesis, save files, and per-session message history.
     db.exec('DELETE FROM event_participants')
