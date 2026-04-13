@@ -19,7 +19,6 @@ const EXPECTED_PROMPTS = [
   'drift_assessor',
   'feasibility_judge',
   'check_dm',
-  'debate_generator',
   'pacing_judge',
   'ambiguity_resolver',
   'intervention_l1',
@@ -27,6 +26,7 @@ const EXPECTED_PROMPTS = [
   'intervention_l3',
   'lazy_eval',
   'npc_response_tier_c',
+  'quest_tracker',
 ]
 
 describe('Prompt registry completeness', () => {
@@ -211,7 +211,7 @@ describe('world_generator prompt', () => {
   const content = prompts.get('world_generator')
 
   it('has conflict intensity scaling section', () => {
-    expect(content).toMatch(/冲突强度.*匹配.*基调|基调.*冲突强度/)
+    expect(content).toMatch(/[Cc]onflict [Ii]ntensity.*[Mm]atch.*[Tt]one/)
   })
 })
 
