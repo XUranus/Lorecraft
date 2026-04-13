@@ -1,6 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { isThemeId, DEFAULT_THEME } from './theme/themes'
+import { readInitialLocale } from './i18n/locales'
 import './theme/global.css'
 import './App.css'
 
@@ -13,15 +15,10 @@ if (savedScale) {
 
 // Restore saved theme before first paint (prevents FOUC)
 const savedTheme = localStorage.getItem('lorecraft:theme')
-if (savedTheme === 'parchment' || savedTheme === 'moonlight' || savedTheme === 'vellum') {
-  document.documentElement.dataset.theme = savedTheme
-}
+document.documentElement.dataset.theme = isThemeId(savedTheme) ? savedTheme : DEFAULT_THEME
 
-// Restore saved locale before first paint
-const savedLocale = localStorage.getItem('lorecraft:locale')
-if (savedLocale) {
-  document.documentElement.lang = savedLocale
-}
+// Restore locale before first paint (detects browser language on first visit)
+document.documentElement.lang = readInitialLocale()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

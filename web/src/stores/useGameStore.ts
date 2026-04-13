@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { ClientMessage, CharacterInfo, ChoiceForClient, GameplayOptions, QuestGraphForClient } from '../types/protocol'
 import { type ThemeId, DEFAULT_THEME, isThemeId, getNextThemeId } from '../theme/themes'
-import { type LocaleId, DEFAULT_LOCALE, STORAGE_KEY as LOCALE_STORAGE_KEY, isLocaleId } from '../i18n/locales'
+import { type LocaleId, STORAGE_KEY as LOCALE_STORAGE_KEY, readInitialLocale } from '../i18n/locales'
 import { clearPaletteCache } from '../tabs/quest-colors'
 
 export interface NarrativeLine {
@@ -164,10 +164,6 @@ function readInitialTheme(): ThemeId {
   return isThemeId(saved) ? saved : DEFAULT_THEME
 }
 
-function readInitialLocale(): LocaleId {
-  const saved = localStorage.getItem(LOCALE_STORAGE_KEY)
-  return isLocaleId(saved) ? saved : DEFAULT_LOCALE
-}
 
 const noop = () => {}
 

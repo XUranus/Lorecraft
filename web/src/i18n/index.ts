@@ -1,6 +1,6 @@
 import i18next, { type TFunction } from 'i18next'
 import { useGameStore } from '../stores/useGameStore'
-import { DEFAULT_LOCALE, LOCALES, STORAGE_KEY, isLocaleId, type LocaleId } from './locales'
+import { readInitialLocale } from './locales'
 
 // ── Eager-load all locale JSON files at build time ──
 const modules = import.meta.glob('./locales/*/*.json', { eager: true }) as Record<
@@ -18,22 +18,6 @@ for (const [path, mod] of Object.entries(modules)) {
   const ns = parts[3].replace('.json', '')  // 'ui'
   if (!resources[lang]) resources[lang] = {}
   resources[lang][ns] = (mod as any).default ?? mod
-}
-
-// ── Read initial locale from localStorage ──
-export function readInitialLocale(): LocaleId {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  if (isLocaleId(saved)) return saved
-
-  // Detect from browser language (e.g. 'zh-CN', 'en-US', 'ja')
-  for (const lang of navigator.languages ?? [navigator.language]) {
-    const exact = lang as LocaleId
-    if (LOCALES.includes(exact)) return exact
-    const prefix = lang.split('-')[0]
-    const match = LOCALES.find((l) => l.startsWith(prefix))
-    if (match) return match
-  }
-  return DEFAULT_LOCALE
 }
 
 // ── Create i18next instance (synchronous init since resources are eager-loaded) ──

@@ -23,3 +23,18 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
 export function isLocaleId(v: unknown): v is LocaleId {
   return v === 'zh-CN' || v === 'en' || v === 'ja'
 }
+
+/** Read locale from localStorage, falling back to browser language detection */
+export function readInitialLocale(): LocaleId {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  if (isLocaleId(saved)) return saved
+
+  for (const lang of navigator.languages ?? [navigator.language]) {
+    const exact = lang as LocaleId
+    if (LOCALES.includes(exact)) return exact
+    const prefix = lang.split('-')[0]
+    const match = LOCALES.find((l) => l.startsWith(prefix))
+    if (match) return match
+  }
+  return DEFAULT_LOCALE
+}
