@@ -19,6 +19,10 @@
   没有固定剧本，没有选项菜单——用自然语言描述你想做的事，AI 会围绕你构建整个世界。
 </p>
 
+<p align="center">
+  <a href="https://thankod.github.io/Lorecraft/">立即体验</a>
+</p>
+
 ---
 
 ## Lorecraft 是什么？

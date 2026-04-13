@@ -19,6 +19,10 @@
   No scripts. No dialogue trees. Just type what you want to do — the AI builds the world around you.
 </p>
 
+<p align="center">
+  <a href="https://thankod.github.io/Lorecraft/">Play Now</a>
+</p>
+
 ---
 
 ## What is Lorecraft?
