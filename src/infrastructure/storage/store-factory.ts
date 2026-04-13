@@ -23,5 +23,10 @@ export interface IStoreFactory {
   listSessions(): SessionInfo[]
   getActiveSession(): SessionInfo | null
   deleteSession(id: string): void
+  scopedStateStore(sessionId: string): IStateStore
+  scopedEventStore(sessionId: string): IEventStore
+  scopedLoreStore(sessionId: string): ILoreStore
+  scopedLongTermMemoryStore(sessionId: string): ILongTermMemoryStore
+  clearPlaythroughData(): void
   resetAll(): void
 }

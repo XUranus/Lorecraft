@@ -8,7 +8,7 @@ export interface ISchemaDatabase {
 // ============================================================
 // Schema version — bump when adding migrations
 // ============================================================
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 // ============================================================
 // Table creation SQL
@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS kv_store (
 -- Events (4-tier combined)
 CREATE TABLE IF NOT EXISTS events (
     id                TEXT PRIMARY KEY,
+    session_id        TEXT NOT NULL DEFAULT '',
     title             TEXT NOT NULL,
     turn              INTEGER NOT NULL,
     day               INTEGER NOT NULL DEFAULT 0,
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_events_turn ON events(turn);
 CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_id);
+CREATE INDEX IF NOT EXISTS idx_events_session_turn ON events(session_id, turn);
 
 -- Event participants (many-to-many)
 CREATE TABLE IF NOT EXISTS event_participants (
@@ -102,6 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_npc_tier ON npc_states(tier);
 -- NPC memories (full history, never compressed)
 CREATE TABLE IF NOT EXISTS npc_memories (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id         TEXT NOT NULL DEFAULT '',
     npc_id             TEXT NOT NULL,
     event_id           TEXT NOT NULL,
     subjective_summary TEXT NOT NULL,
@@ -113,6 +116,7 @@ CREATE TABLE IF NOT EXISTS npc_memories (
 
 CREATE INDEX IF NOT EXISTS idx_mem_npc ON npc_memories(npc_id, recorded_at_turn);
 CREATE INDEX IF NOT EXISTS idx_mem_event ON npc_memories(event_id);
+CREATE INDEX IF NOT EXISTS idx_mem_session_npc ON npc_memories(session_id, npc_id, recorded_at_turn);
 
 -- Memory participants (who is mentioned in a memory)
 CREATE TABLE IF NOT EXISTS memory_participants (
@@ -149,6 +153,7 @@ CREATE INDEX IF NOT EXISTS idx_conv_session_npc ON conversations(session_id, npc
 -- Lore entries
 CREATE TABLE IF NOT EXISTS lore (
     id               TEXT PRIMARY KEY,
+    session_id       TEXT NOT NULL DEFAULT '',
     content          TEXT NOT NULL,
     fact_type        TEXT NOT NULL,
     authority_level  TEXT NOT NULL,
@@ -161,6 +166,7 @@ CREATE TABLE IF NOT EXISTS lore (
 
 CREATE INDEX IF NOT EXISTS idx_lore_hash ON lore(content_hash);
 CREATE INDEX IF NOT EXISTS idx_lore_type ON lore(fact_type);
+CREATE INDEX IF NOT EXISTS idx_lore_session_hash ON lore(session_id, content_hash);
 
 -- Lore subjects (many-to-many)
 CREATE TABLE IF NOT EXISTS lore_subjects (
@@ -308,6 +314,26 @@ export function initializeSchema(db: ISchemaDatabase): void {
   for (const block of CREATE_FTS_TRIGGERS.split(/(?=CREATE TRIGGER)/)) {
     const trimmed = block.trim()
     if (trimmed) db.exec(trimmed)
+  }
+
+  if (currentVersion < 3) {
+    try { db.exec("ALTER TABLE events ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
+    try { db.exec("ALTER TABLE npc_memories ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
+    try { db.exec("ALTER TABLE lore ADD COLUMN session_id TEXT NOT NULL DEFAULT ''") } catch {}
+
+    db.exec('CREATE INDEX IF NOT EXISTS idx_events_session_turn ON events(session_id, turn)')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mem_session_npc ON npc_memories(session_id, npc_id, recorded_at_turn)')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_lore_session_hash ON lore(session_id, content_hash)')
+
+    // Old runtime data was not session-scoped. Drop it while preserving sessions,
+    // genesis, save files, and per-session message history.
+    db.exec('DELETE FROM event_participants')
+    db.exec('DELETE FROM events')
+    db.exec('DELETE FROM memory_participants')
+    db.exec('DELETE FROM npc_memories')
+    db.exec('DELETE FROM lore_subjects')
+    db.exec('DELETE FROM lore')
+    db.exec("DELETE FROM kv_store WHERE key NOT LIKE 'save:%' AND key NOT LIKE 'session:%'")
   }
 
   // Update version

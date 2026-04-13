@@ -119,6 +119,10 @@ export interface DebugErrorContext {
 
 export class GameLoop {
   private store: IStoreFactory
+  private rootStateStore: IStateStore
+  private rootEventStore: IEventStore
+  private rootLoreStore: ILoreStore
+  private rootLongTermMemoryStore: ILongTermMemoryStore
   private stateStore: IStateStore
   private eventStore: IEventStore
   private loreStore: ILoreStore
@@ -150,10 +154,14 @@ export class GameLoop {
 
   constructor(store: IStoreFactory, provider: ILLMProvider, options?: { debugLogger?: IDebugLogger }) {
     this.store = store
-    this.stateStore = store.stateStore
-    this.eventStore = store.eventStore
-    this.loreStore = store.loreStore
-    this.longTermMemoryStore = store.longTermMemoryStore
+    this.rootStateStore = store.stateStore
+    this.rootEventStore = store.eventStore
+    this.rootLoreStore = store.loreStore
+    this.rootLongTermMemoryStore = store.longTermMemoryStore
+    this.stateStore = this.rootStateStore
+    this.eventStore = this.rootEventStore
+    this.loreStore = this.rootLoreStore
+    this.longTermMemoryStore = this.rootLongTermMemoryStore
     this.sessionStore = store.sessionStore
     this.injectionQueueManager = new InMemoryInjectionQueueManager()
     this.agentRunner = new AgentRunner(provider, {
@@ -164,28 +172,18 @@ export class GameLoop {
       debugLogger: options?.debugLogger,
     })
     this.configLoader = new ExtensionConfigLoader()
-    this.signalProcessor = new SignalProcessor(this.stateStore, this.configLoader.getTraitConfigs())
     this.locationGraph = new LocationGraph([])
     this.insistenceSM = new InsistenceStateMachine()
     this.deadLetterQueue = new DeadLetterQueue()
     this.eventBus = new EventBus(this.deadLetterQueue)
     this.broadcastRouter = new BroadcastRouter(this.stateStore)
-
-    const intentGenerator = new NPCIntentGenerator(this.agentRunner, this.stateStore)
-    const tierManager = new NPCTierManager(this.stateStore)
-    this.agentScheduler = new AgentScheduler(this.stateStore, intentGenerator, tierManager, {
+    this.signalProcessor = new SignalProcessor(this.stateStore, this.configLoader.getTraitConfigs())
+    this.agentScheduler = new AgentScheduler(this.stateStore, new NPCIntentGenerator(this.agentRunner, this.stateStore), new NPCTierManager(this.stateStore), {
       injectionQueueManager: this.injectionQueueManager,
       deadLetterQueue: this.deadLetterQueue,
     })
     this.narrativeRailAgent = new NarrativeRailAgent(this.agentRunner, this.eventStore, this.stateStore)
-
-    this.saveLoadSystem = new SaveLoadSystem(
-      this.stateStore,
-      this.eventStore,
-      this.sessionStore,
-      this.longTermMemoryStore,
-      this.injectionQueueManager,
-    )
+    this.saveLoadSystem = new SaveLoadSystem(this.stateStore, this.eventStore, this.sessionStore, this.longTermMemoryStore, this.injectionQueueManager)
   }
 
   setListener(listener: GameEventListener): void {
@@ -232,8 +230,11 @@ export class GameLoop {
   private async generateWorld(): Promise<void> {
     if (!this.selectedStyle) return
     this.agentRunner.markTurn(0, '[INITIALIZATION]')
+    const sessionId = uuid()
+    this.applySessionScope(sessionId)
 
     this.configLoader = new ExtensionConfigLoader({ style: this.selectedStyle })
+    this.rebuildScopedServices()
     this.listener?.onInitProgress({ key: 'init.generatingWorld' })
 
     // Emit debug turn 0 for world generation
@@ -320,7 +321,6 @@ export class GameLoop {
         })
       }
 
-      const sessionId = uuid()
       const startLocation = doc.initial_locations[0]?.id ?? 'unknown'
 
       this.gameState = {
@@ -343,6 +343,7 @@ export class GameLoop {
       }))
       this.listener?.onCharCreate?.(this.pendingAttributes, meta)
     } catch (err) {
+      this.applySessionScope(null)
       this.listener?.onError(`Initialization failed: ${err instanceof Error ? err.message : String(err)}`)
       throw err
     }
@@ -432,8 +433,22 @@ export class GameLoop {
     this.insistenceState = 'NORMAL'
   }
 
-  /** Clear runtime state only — database is untouched, existing sessions preserved. */
-  resetRuntime(): void {
+  private applySessionScope(sessionId: string | null): void {
+    if (sessionId) {
+      this.stateStore = this.store.scopedStateStore(sessionId)
+      this.eventStore = this.store.scopedEventStore(sessionId)
+      this.loreStore = this.store.scopedLoreStore(sessionId)
+      this.longTermMemoryStore = this.store.scopedLongTermMemoryStore(sessionId)
+    } else {
+      this.stateStore = this.rootStateStore
+      this.eventStore = this.rootEventStore
+      this.loreStore = this.rootLoreStore
+      this.longTermMemoryStore = this.rootLongTermMemoryStore
+    }
+    this.rebuildScopedServices()
+  }
+
+  private rebuildScopedServices(): void {
     this.injectionQueueManager = new InMemoryInjectionQueueManager()
     this.signalProcessor = new SignalProcessor(this.stateStore, this.configLoader.getTraitConfigs())
     this.locationGraph = new LocationGraph([])
@@ -456,6 +471,11 @@ export class GameLoop {
       this.longTermMemoryStore,
       this.injectionQueueManager,
     )
+  }
+
+  /** Clear runtime state only — database is untouched, existing sessions preserved. */
+  resetRuntime(): void {
+    this.rebuildScopedServices()
 
     this.gameState = null
     this.insistenceState = 'NORMAL'
@@ -466,13 +486,20 @@ export class GameLoop {
     this.selectedStyle = null
   }
 
+  /** Start a fresh game while preserving other sessions and stored data. */
+  resetForNewGame(): void {
+    this.applySessionScope(null)
+    this.resetRuntime()
+  }
+
   /** Wipe ALL data (all sessions, all tables) and reset runtime. */
   reset(): void {
     this.store.resetAll()
-    this.stateStore = this.store.stateStore
-    this.eventStore = this.store.eventStore
-    this.loreStore = this.store.loreStore
-    this.longTermMemoryStore = this.store.longTermMemoryStore
+    this.rootStateStore = this.store.stateStore
+    this.rootEventStore = this.store.eventStore
+    this.rootLoreStore = this.store.loreStore
+    this.rootLongTermMemoryStore = this.store.longTermMemoryStore
+    this.applySessionScope(null)
     this.sessionStore = this.store.sessionStore
     this.resetRuntime()
   }
@@ -784,12 +811,12 @@ export class GameLoop {
   /** Persist message history for the current session */
   async saveSessionHistory(history: unknown[]): Promise<void> {
     if (!this.gameState) return
-    await this.stateStore.set(`session:${this.gameState.sessionId}:history`, history)
+    await this.rootStateStore.set(`session:${this.gameState.sessionId}:history`, history)
   }
 
   /** Load message history for a given session */
   async loadSessionHistory(sessionId: string): Promise<unknown[] | null> {
-    return this.stateStore.get<unknown[]>(`session:${sessionId}:history`)
+    return this.rootStateStore.get<unknown[]>(`session:${sessionId}:history`)
   }
 
   getGameState(): GameState | null {
@@ -1021,6 +1048,7 @@ export class GameLoop {
 
     // Activate session
     this.store.activateSession(sessionId)
+    this.applySessionScope(sessionId)
 
     // Rebuild game state
     this.gameState = {
@@ -1065,6 +1093,7 @@ export class GameLoop {
     // If we deleted the active session, clear game state
     if (this.gameState?.sessionId === sessionId) {
       this.gameState = null
+      this.applySessionScope(null)
     }
   }
 }

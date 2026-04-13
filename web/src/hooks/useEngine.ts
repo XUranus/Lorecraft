@@ -377,7 +377,7 @@ async function handleMessage(
         if (initializedRef.current) {
           await engine.saveSessionHistory(sessionMessagesRef.current)
         }
-        engine.resetRuntime()
+        engine.resetForNewGame()
         initializedRef.current = false
         sessionMessagesRef.current = []
         store.getState().resetGame()
