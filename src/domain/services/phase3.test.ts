@@ -145,7 +145,7 @@ const SUBJECTIVE_MEMORY_JSON = JSON.stringify({
 
 const NPC_INTENT_JSON = JSON.stringify({
   intent: 'Search the old library for clues about the artifact',
-  atomic_actions: [{ type: 'MOVE_TO', target: 'library', method: null, order: 0 }],
+  actions: [{ type: 'MOVE_TO', target: 'library', method: null }],
 })
 
 const LAZY_EVAL_JSON = JSON.stringify({
@@ -630,8 +630,8 @@ describe('AgentScheduler', () => {
     expect(intents.length).toBe(1)
     expect(intents[0].npc_id).toBe(npc_id)
     expect(intents[0].intent).toBe('Search the old library for clues about the artifact')
-    expect(intents[0].atomic_actions.length).toBe(1)
-    expect(intents[0].atomic_actions[0].type).toBe('MOVE_TO')
+    expect(intents[0].actions.length).toBe(1)
+    expect(intents[0].actions[0].type).toBe('MOVE_TO')
   })
 
   it('skips active NPCs (in conversation)', async () => {

@@ -2,7 +2,6 @@ import type { IPipelineStep, PipelineContext, StepResult } from '../pipeline/typ
 import type { AgentRunner } from '../../ai/runner/agent-runner.js'
 import type {
   ParsedIntent,
-  AtomicAction,
   InputPipelineOutput,
   ToneSignals,
 } from '../../domain/models/pipeline-io.js'
@@ -94,7 +93,7 @@ export class InputParserStep implements IPipelineStep<string, ParsedIntent> {
         this.parser,
         this.agentRunner,
         response.content,
-        '{ "intent": string, "tone_signals": { [key]: number }, "atomic_actions": [{ "type": string, "target": string|null, "method": string|null, "order": number }], "ambiguity_flags": string[], "world_assertions": string[] }',
+        '{ "intent": string, "tone_signals": { [key]: number }, "action": { "type": string, "target": string|null, "method": string|null }, "ambiguity_flags": string[], "world_assertions": string[] }',
       )
 
       if (!result.success) {
@@ -153,38 +152,7 @@ export class WorldAssertionFilterStep implements IPipelineStep<ParsedIntent, Par
 }
 
 // ============================================================
-// Step 4: ActionValidationStep — validate action types & sort
-// ============================================================
-
-export class ActionValidationStep implements IPipelineStep<ParsedIntent, ParsedIntent> {
-  readonly name = 'ActionValidationStep'
-
-  async execute(input: ParsedIntent, _context: PipelineContext): Promise<StepResult<ParsedIntent>> {
-    if (input.atomic_actions.length === 0) {
-      return {
-        status: 'error',
-        error: {
-          code: 'NO_ACTIONS',
-          message: 'ParsedIntent contains no atomic actions.',
-          step: this.name,
-          recoverable: false,
-        },
-      }
-    }
-
-    const sortedActions: AtomicAction[] = [...input.atomic_actions].sort(
-      (a, b) => a.order - b.order,
-    )
-
-    return {
-      status: 'continue',
-      data: { ...input, atomic_actions: sortedActions },
-    }
-  }
-}
-
-// ============================================================
-// Step 5: ToneSignalStep — write tone_signals to context
+// Step 4: ToneSignalStep — write tone_signals to context
 // ============================================================
 
 export class ToneSignalStep implements IPipelineStep<ParsedIntent, InputPipelineOutput> {
@@ -203,7 +171,7 @@ export class ToneSignalStep implements IPipelineStep<ParsedIntent, InputPipeline
       original_text: (context.data.get('original_text') as string) ?? '',
       intent: input.intent,
       tone_signals: toneSignals,
-      atomic_actions: input.atomic_actions,
+      action: input.action,
       ambiguity_resolved: input.ambiguity_flags.length === 0,
     }
 

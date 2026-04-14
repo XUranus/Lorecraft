@@ -14,7 +14,6 @@ import { SignalProcessor } from '../domain/services/signal-processor.js'
 import {
   ValidationStep,
   InputParserStep,
-  ActionValidationStep,
   ToneSignalStep,
 } from './steps/input-steps.js'
 
@@ -255,7 +254,6 @@ function buildPipeline(deps: {
   // ── Input Pipeline ──
   pipeline.addStep(new ValidationStep())
   pipeline.addStep(new InputParserStep(agentRunner))
-  pipeline.addStep(new ActionValidationStep())
   pipeline.addStep(new ToneSignalStep())
 
   // ── Reflection Pipeline ──
@@ -273,8 +271,8 @@ function buildPipeline(deps: {
   pipeline.addStep(
     new FullContextStep(stateStore, loreStore, eventStore),
     (_prevOutput, context) => {
-      const parsedIntent = context.data.get('parsed_intent') as { atomic_actions: any[] }
-      return parsedIntent.atomic_actions[0]
+      const parsedIntent = context.data.get('parsed_intent') as { action: any }
+      return parsedIntent.action
     },
   )
   pipeline.addStep(new ActionArbiterStep(agentRunner))
@@ -336,12 +334,14 @@ describe('Phase 2 Pipeline Integration', () => {
       (sys) => sys.includes('InputParser'),
       JSON.stringify({
         intent: '前往警察局观察',
-        atomic_actions: [
-          { type: 'MOVE_TO', target: 'police_station', method: null, order: 0 },
-          { type: 'EXAMINE', target: null, method: null, order: 1 },
-        ],
+        action: {
+          type: 'MOVE_TO',
+          target: 'police_station',
+          method: '前往警察局并观察周围环境',
+        },
         tone_signals: {},
         ambiguity_flags: [],
+        world_assertions: [],
       }),
     )
 
@@ -429,11 +429,10 @@ describe('Phase 2 Pipeline Integration', () => {
       (sys) => sys.includes('InputParser'),
       JSON.stringify({
         intent: '前往市长办公室',
-        atomic_actions: [
-          { type: 'MOVE_TO', target: 'mayor_office', method: null, order: 0 },
-        ],
+        action: { type: 'MOVE_TO', target: 'mayor_office', method: null },
         tone_signals: {},
         ambiguity_flags: [],
+        world_assertions: [],
       }),
     )
 
@@ -490,11 +489,10 @@ describe('Phase 2 Pipeline Integration', () => {
       (sys) => sys.includes('InputParser'),
       JSON.stringify({
         intent: '观察周围环境',
-        atomic_actions: [
-          { type: 'EXAMINE', target: null, method: null, order: 0 },
-        ],
+        action: { type: 'EXAMINE', target: null, method: null },
         tone_signals: {},
         ambiguity_flags: [],
+        world_assertions: [],
       }),
     )
 

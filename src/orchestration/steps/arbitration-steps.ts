@@ -3,7 +3,7 @@ import type { IPipelineStep, PipelineContext, StepResult, NarrativeOutput } from
 import type { AgentRunner } from '../../ai/runner/agent-runner.js'
 import type { IStateStore, ILoreStore, IEventStore } from '../../infrastructure/storage/interfaces.js'
 import type {
-  AtomicAction,
+  Action,
   ArbitrationResult,
 } from '../../domain/models/pipeline-io.js'
 import type { PlayerAttributes } from '../../domain/models/attributes.js'
@@ -28,7 +28,7 @@ export interface BeatPlan {
 // (replaces ParallelQueryStep + EventContextStep)
 // ============================================================
 
-export class FullContextStep implements IPipelineStep<AtomicAction, AtomicAction> {
+export class FullContextStep implements IPipelineStep<Action, Action> {
   readonly name = 'FullContextStep'
   private readonly stateStore: IStateStore
   private readonly loreStore: ILoreStore
@@ -40,7 +40,7 @@ export class FullContextStep implements IPipelineStep<AtomicAction, AtomicAction
     this.eventStore = eventStore
   }
 
-  async execute(input: AtomicAction, context: PipelineContext): Promise<StepResult<AtomicAction>> {
+  async execute(input: Action, context: PipelineContext): Promise<StepResult<Action>> {
     const characterId = context.player_character_id
 
     const [
@@ -149,7 +149,7 @@ function rollTarget(difficulty: string): number {
   return min + Math.floor(Math.random() * (max - min + 1))
 }
 
-export class ActionArbiterStep implements IPipelineStep<AtomicAction, AtomicAction> {
+export class ActionArbiterStep implements IPipelineStep<Action, Action> {
   readonly name = 'ActionArbiterStep'
   private readonly agentRunner: AgentRunner
   private readonly parser = new ResponseParser(ActionArbiterOutputSchema)
@@ -158,7 +158,7 @@ export class ActionArbiterStep implements IPipelineStep<AtomicAction, AtomicActi
     this.agentRunner = agentRunner
   }
 
-  async execute(input: AtomicAction, context: PipelineContext): Promise<StepResult<AtomicAction>> {
+  async execute(input: Action, context: PipelineContext): Promise<StepResult<Action>> {
     // When action arbiter is disabled, auto-pass everything with no checks
     if (!context.options.action_arbiter) {
       context.data.set('drift_flag', false)
@@ -355,11 +355,11 @@ export class ActionArbiterStep implements IPipelineStep<AtomicAction, AtomicActi
 // ArbitrationResultStep — assemble final result
 // ============================================================
 
-export class ArbitrationResultStep implements IPipelineStep<AtomicAction, ArbitrationResult> {
+export class ArbitrationResultStep implements IPipelineStep<Action, ArbitrationResult> {
   readonly name = 'ArbitrationResultStep'
 
   async execute(
-    input: AtomicAction,
+    input: Action,
     context: PipelineContext,
   ): Promise<StepResult<ArbitrationResult>> {
     const forceFlag = (context.data.get('force_flag') as boolean | undefined) ?? false

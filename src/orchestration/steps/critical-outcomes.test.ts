@@ -3,12 +3,12 @@ import { ActionArbiterStep } from './arbitration-steps.js'
 import type { AttributeCheckResult } from './arbitration-steps.js'
 import { createPipelineContext } from '../pipeline/types.js'
 import type { PipelineContext } from '../pipeline/types.js'
-import type { AtomicAction } from '../../domain/models/pipeline-io.js'
+import type { Action } from '../../domain/models/pipeline-io.js'
 
 // Minimal mock for AgentRunner — predetermined checks skip LLM entirely
 const mockAgentRunner = {} as any
 
-function makeContext(roll: number): { ctx: PipelineContext; input: AtomicAction } {
+function makeContext(roll: number): { ctx: PipelineContext; input: Action } {
   // Math.random() → [0,1), roll = floor(random*100)+1
   // To get roll=R, we need floor(random*100)+1=R → random = (R-1)/100
   vi.spyOn(Math, 'random').mockReturnValue((roll - 1) / 100)
@@ -26,7 +26,7 @@ function makeContext(roll: number): { ctx: PipelineContext; input: AtomicAction 
   })
   ctx.data.set('predetermined_check', { attribute_id: 'charisma', difficulty: 'ROUTINE' })
 
-  const input: AtomicAction = { type: 'TALK', target: 'npc1', method: null, order: 0 }
+  const input: Action = { type: 'TALK', target: 'npc1', method: null }
 
   return { ctx, input }
 }
@@ -64,7 +64,7 @@ describe('Critical Outcomes', () => {
     })
     ctx.data.set('predetermined_check', { attribute_id: 'charisma', difficulty: 'ROUTINE' })
 
-    const input: AtomicAction = { type: 'TALK', target: 'npc1', method: null, order: 0 }
+    const input: Action = { type: 'TALK', target: 'npc1', method: null }
     await step.execute(input, ctx)
 
     const check = ctx.data.get('attribute_check') as AttributeCheckResult
@@ -90,7 +90,7 @@ describe('Critical Outcomes', () => {
     })
     ctx.data.set('predetermined_check', { attribute_id: 'charisma', difficulty: 'TRIVIAL' })
 
-    const input: AtomicAction = { type: 'TALK', target: 'npc1', method: null, order: 0 }
+    const input: Action = { type: 'TALK', target: 'npc1', method: null }
     await step.execute(input, ctx)
 
     const check = ctx.data.get('attribute_check') as AttributeCheckResult
@@ -114,7 +114,7 @@ describe('Critical Outcomes', () => {
     })
     ctx.data.set('predetermined_check', { attribute_id: 'charisma', difficulty: 'TRIVIAL' })
 
-    const input: AtomicAction = { type: 'TALK', target: 'npc1', method: null, order: 0 }
+    const input: Action = { type: 'TALK', target: 'npc1', method: null }
     await step.execute(input, ctx)
 
     const check = ctx.data.get('attribute_check') as AttributeCheckResult
@@ -140,7 +140,7 @@ describe('Critical Outcomes', () => {
     })
     ctx.data.set('predetermined_check', { attribute_id: 'charisma', difficulty: 'LEGENDARY' })
 
-    const input: AtomicAction = { type: 'TALK', target: 'npc1', method: null, order: 0 }
+    const input: Action = { type: 'TALK', target: 'npc1', method: null }
     await step.execute(input, ctx)
 
     const check = ctx.data.get('attribute_check') as AttributeCheckResult
@@ -165,7 +165,7 @@ describe('Critical Outcomes', () => {
     })
     ctx.data.set('predetermined_check', { attribute_id: 'charisma', difficulty: 'ROUTINE' })
 
-    const input: AtomicAction = { type: 'TALK', target: 'npc1', method: null, order: 0 }
+    const input: Action = { type: 'TALK', target: 'npc1', method: null }
     await step.execute(input, ctx)
 
     const desc = ctx.data.get('check_description') as string

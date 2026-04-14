@@ -1,20 +1,19 @@
 import { z } from 'zod/v4'
 
 // ============================================================
-// Atomic Action Types
+// Action Types
 // ============================================================
 
-export const AtomicActionType = z.string().transform((s) => s.toUpperCase())
-export type AtomicActionType = string
+export const ActionTypeSchema = z.string().transform((s) => s.toUpperCase())
+export type ActionType = string
 
-export const AtomicActionSchema = z.object({
-  type: AtomicActionType,
+export const ActionSchema = z.object({
+  type: ActionTypeSchema,
   target: z.string().nullable(),
   method: z.string().nullable(),
-  order: z.number().int().nonnegative(),
 })
 
-export type AtomicAction = z.infer<typeof AtomicActionSchema>
+export type Action = z.infer<typeof ActionSchema>
 
 // ============================================================
 // Tone Signals (Signal A input)
@@ -30,7 +29,7 @@ export type ToneSignals = z.infer<typeof ToneSignalsSchema>
 export const ParsedIntentSchema = z.object({
   intent: z.string(),
   tone_signals: ToneSignalsSchema,
-  atomic_actions: z.array(AtomicActionSchema).min(1),
+  action: ActionSchema,
   ambiguity_flags: z.array(z.string()),
   world_assertions: z.array(z.string()).default([]),
 })
@@ -41,7 +40,7 @@ export const InputPipelineOutputSchema = z.object({
   original_text: z.string(),
   intent: z.string(),
   tone_signals: ToneSignalsSchema,
-  atomic_actions: z.array(AtomicActionSchema),
+  action: ActionSchema,
   ambiguity_resolved: z.boolean(),
 })
 
@@ -132,7 +131,7 @@ export type ActionArbiterOutput = z.infer<typeof ActionArbiterOutputSchema>
 
 export const ArbitrationResultSchema = z.object({
   passed: z.boolean(),
-  action: AtomicActionSchema,
+  action: ActionSchema,
   force_flag: z.boolean(),
   force_level: z.union([z.literal(0), z.literal(1), z.literal(2)]),
   drift_flag: z.boolean(),

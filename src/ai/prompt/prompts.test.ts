@@ -56,7 +56,7 @@ describe('input_parser prompt', () => {
   })
 
   it('defines ParsedIntent schema fields', () => {
-    expect(content).toContain('atomic_actions')
+    expect(content).toContain('"action"')
     expect(content).toContain('intent')
     expect(content).toContain('tone_signals')
     expect(content).toContain('world_assertions')
@@ -76,7 +76,7 @@ describe('input_parser prompt', () => {
   })
 
   it('enforces single action output', () => {
-    expect(content).toContain('exactly ONE atomic action')
+    expect(content).toContain('exactly ONE action object')
   })
 })
 

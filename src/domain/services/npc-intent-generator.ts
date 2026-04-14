@@ -5,8 +5,8 @@ import { ResponseParser } from '../../ai/parser/response-parser.js'
 import { parseWithRepair } from '../../ai/parser/json-repair.js'
 import type { IStateStore } from '../../infrastructure/storage/interfaces.js'
 import type { CharacterDynamicState, MemoryBuffer } from '../models/character.js'
-import { AtomicActionSchema } from '../models/pipeline-io.js'
-import type { AtomicAction } from '../models/pipeline-io.js'
+import { ActionSchema } from '../models/pipeline-io.js'
+import type { Action } from '../models/pipeline-io.js'
 
 // ============================================================
 // LLM Response Schema
@@ -14,7 +14,7 @@ import type { AtomicAction } from '../models/pipeline-io.js'
 
 const NPCIntentSchema = z.object({
   intent: z.string(),
-  atomic_actions: z.array(AtomicActionSchema).min(1),
+  actions: z.array(ActionSchema).min(1),
 })
 
 type NPCIntent = z.infer<typeof NPCIntentSchema>
@@ -22,7 +22,7 @@ type NPCIntent = z.infer<typeof NPCIntentSchema>
 export interface NPCIntentResult {
   npc_id: string
   intent: string
-  atomic_actions: AtomicAction[]
+  actions: Action[]
 }
 
 export class NPCIntentGenerator {
@@ -59,7 +59,7 @@ export class NPCIntentGenerator {
     return {
       npc_id,
       intent: parsed.intent,
-      atomic_actions: parsed.atomic_actions,
+      actions: parsed.actions,
     }
   }
 
@@ -99,7 +99,7 @@ export class NPCIntentGenerator {
       'Action types: MOVE_TO, SPEAK_TO, EXAMINE, GIVE, CONFRONT, WAIT, THINK',
       '',
       'Output JSON:',
-      '{ "intent": "description of what the NPC wants to do", "atomic_actions": [{ "type": "...", "target": "..." | null, "method": "..." | null, "order": 0 }] }',
+      '{ "intent": "description of what the NPC wants to do", "actions": [{ "type": "...", "target": "..." | null, "method": "..." | null }] }',
     )
 
     return [
@@ -118,7 +118,7 @@ export class NPCIntentGenerator {
       this.parser,
       this.runner,
       response.content,
-      '{ "intent": string, "atomic_actions": [{ "type": string, "target": string|null, "method": string|null, "order": number }] }',
+      '{ "intent": string, "actions": [{ "type": string, "target": string|null, "method": string|null }] }',
     )
 
     if (!result.success) {

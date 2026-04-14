@@ -22,7 +22,6 @@ import {
   ValidationStep,
   InputParserStep,
   WorldAssertionFilterStep,
-  ActionValidationStep,
   ToneSignalStep,
 } from '../orchestration/steps/input-steps.js'
 import {
@@ -992,7 +991,6 @@ export class GameLoop {
     pipeline.addStep(new ValidationStep())
     pipeline.addStep(new InputParserStep(this.agentRunner))
     pipeline.addStep(new WorldAssertionFilterStep())
-    pipeline.addStep(new ActionValidationStep())
     pipeline.addStep(new ToneSignalStep())
 
     // Reflection stage (attribute-based inner voices)
@@ -1006,7 +1004,7 @@ export class GameLoop {
     // Arbitration stage — full context fetch + unified feasibility/check
     pipeline.addStep(new FullContextStep(this.stateStore, this.loreStore, this.eventStore), (_prevOutput, ctx) => {
       const parsedIntent = ctx.data.get('parsed_intent') as ParsedIntent | undefined
-      return parsedIntent?.atomic_actions?.[0] ?? _prevOutput
+      return parsedIntent?.action ?? _prevOutput
     })
     pipeline.addStep(new ActionArbiterStep(this.agentRunner))
     pipeline.addStep(new ArbitrationResultStep())

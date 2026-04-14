@@ -144,7 +144,7 @@ export class VoiceDebateStep implements IPipelineStep<ParsedIntent, ParsedIntent
         personality: v.voice_personality,
       })),
       intent_summary: input.intent,
-      atomic_actions: input.atomic_actions,
+      action: input.action,
       injected_context: injectedContext,
       world_assertion_hint: worldAssertionHint,
     })
